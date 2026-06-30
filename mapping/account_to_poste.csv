@@ -1,0 +1,52 @@
+account_prefix,poste
+# ------------------------------------------------------------------------------
+# PROVISIONAL account -> P&L poste mapping (PCG class heuristic).
+# Longest matching prefix wins (e.g. 6155 beats 61).
+# WARNING: the P&L management postes are a RECLASSIFICATION of the SAP report
+# hierarchy (212-000), NOT a raw PCG grouping. For an exact tie-out, replace this
+# file with the account -> report-node export from SAP. See prompt sections 7 & 9.
+# ------------------------------------------------------------------------------
+# Personnel
+64,Personnel expenses
+63,Personnel expenses
+645,Personnel expenses
+# Outsourcing / subcontracting
+611,Outsourcing
+6051000,Outsourcing
+6053,Outsourcing
+6054,Outsourcing
+6004,Outsourcing
+# Contractors (external freelance) — pins to the exact account
+6054700,Contractors
+# Occupancy (rent, utilities)
+613,Occupancy
+614,Occupancy
+615,Occupancy
+610,Occupancy
+# ICT (telecom, software, hosting)
+6155,ICT
+626,ICT
+6201,ICT
+# Marketing
+623,Marketing
+6207,Marketing
+620,Marketing
+# Travel
+625,Travel
+# Office supplies
+606,Office supplies
+6005,Office supplies
+6006,Office supplies
+6007,Office supplies
+600,Office supplies
+# Law and consultancy fees
+622,Law and consultancy fees
+# Insurances
+616,Insurances
+# Financial result
+66,Financial result
+# Other expenses (fallback within class 6)
+6003,Other expenses
+635,Other expenses
+630,Other expenses
+658,Other expenses

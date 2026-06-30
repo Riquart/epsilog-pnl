@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EPSILOG — Tableau de bord P&L</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg:#0f172a;--card:#fff;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;
+--pos:#16a34a;--neg:#dc2626;--accent:#2563eb;--accent2:#7c3aed;--soft:#f8fafc;}
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+background:var(--soft);color:var(--ink)}
+header{background:linear-gradient(120deg,#0f172a,#1e293b);color:#fff;padding:18px 28px;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+header h1{margin:0;font-size:18px;font-weight:650;letter-spacing:.2px}
+header .sub{color:#94a3b8;font-size:12.5px;margin-top:4px}
+.htools{display:flex;gap:8px;align-items:center}
+.htools select,.htools button{font-size:12.5px;border-radius:8px;padding:7px 11px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;cursor:pointer}
+.htools button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.htools button:hover{filter:brightness(1.1)}
+.wrap{max-width:1280px;margin:0 auto;padding:22px 28px 60px}
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:22px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+.kpi .t{font-size:12px;color:var(--muted);font-weight:600}
+.kpi .v{font-size:21px;font-weight:700;margin-top:6px}
+.kpi .d{font-size:12px;margin-top:6px;font-weight:600}
+.kpi .y{font-size:11px;color:var(--muted);margin-top:3px}
+.grid{display:grid;grid-template-columns:1.15fr 1fr;gap:18px;margin-bottom:22px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+.panel h3{margin:0 0 12px;font-size:14px}
+.full{grid-column:1/-1}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:7px 10px;text-align:right;white-space:nowrap}
+th{color:var(--muted);font-weight:600;border-bottom:2px solid var(--line);font-size:11.5px;text-transform:uppercase;letter-spacing:.4px}
+td.lbl,th.lbl{text-align:left}
+tr.l0{font-weight:700;background:#f1f5f9}
+tr.l0 td{border-top:1px solid var(--line)}
+tr.hd td{background:#0f172a;color:#fff;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+tr.l2 td.lbl{padding-left:34px;color:#475569}
+tr.l1 td.lbl{padding-left:20px}
+tr.drill{cursor:pointer}
+tr.drill td.lbl::after{content:" ›";color:var(--accent);font-weight:700}
+tr.drill:hover{background:#eff6ff}
+.pos{color:var(--pos)}.neg{color:var(--neg)}.neu{color:var(--muted)}
+.hidden{display:none}
+.ph{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.ph h3{margin:0}
+.colpick{position:relative;flex:none}
+.colbtn{padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--ink)}
+.colbtn:hover{background:var(--soft)}
+.colmenu{position:absolute;right:0;top:38px;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 28px rgba(15,23,42,.14);padding:8px;z-index:30;min-width:160px}
+.colmenu label{display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:13px;border-radius:6px;cursor:pointer;white-space:nowrap}
+.colmenu label:hover{background:var(--soft)}
+.colmenu input{accent-color:var(--accent)}
+.tabs{display:flex;gap:8px;margin-bottom:14px}
+.tab{padding:7px 14px;border:1px solid var(--line);border-radius:999px;background:#fff;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--muted)}
+.tab.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.drawer{position:fixed;top:0;right:-560px;width:540px;max-width:92vw;height:100%;background:#fff;
+box-shadow:-12px 0 40px rgba(15,23,42,.18);transition:right .25s ease;z-index:50;display:flex;flex-direction:column}
+.drawer.open{right:0}
+.drawer .dh{padding:16px 20px;border-bottom:1px solid var(--line)}
+.drawer .dh h3{margin:0;font-size:15px}
+.drawer .dh .note{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.4}
+.drawer .db{overflow:auto;padding:8px 14px 30px}
+.x{position:absolute;top:14px;right:16px;cursor:pointer;color:var(--muted);font-size:20px;border:none;background:none}
+.backdrop{position:fixed;inset:0;background:rgba(15,23,42,.35);opacity:0;pointer-events:none;transition:.25s;z-index:40}
+.backdrop.open{opacity:1;pointer-events:auto}
+.badge{display:inline-block;font-size:10.5px;padding:2px 7px;border-radius:6px;background:#eff6ff;color:var(--accent);font-weight:700}
+small.cap{color:var(--muted)}
+.drawer .dh .note b{color:#b45309}
+.recon{background:#fff7ed;border:1px solid #fed7aa;border-radius:9px;padding:10px 12px;font-size:12.5px;line-height:1.6;margin:6px 0 14px}
+tr.acctrow{cursor:pointer}
+tr.acctrow:hover{background:#eff6ff}
+tr.acctrow.sel{background:#dbeafe}
+tr.acctrow.sel td{font-weight:700}
+.alab{font-size:12px;color:#475569}
+.alab.muted{color:#cbd5e1;font-style:italic;font-weight:400}
+button.ren{border:none;background:none;cursor:pointer;color:#cbd5e1;font-size:12px;padding:0 4px}
+tr.acctrow:hover button.ren{color:#94a3b8}
+button.ren:hover{color:var(--accent)!important}
+.clearf{border:none;background:#eff6ff;color:var(--accent);border-radius:6px;cursor:pointer;font-size:11px;padding:2px 8px;margin-left:6px;font-weight:700}
+.nodrill{color:var(--muted);font-size:12.5px;padding:14px}
+#empty{text-align:center;padding:60px 20px;color:var(--muted)}
+.modal{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;z-index:60}
+.modal.open{display:flex}
+.modalbox{background:#fff;border-radius:14px;padding:24px;width:460px;max-width:92vw}
+.modalbox h3{margin:0 0 14px;font-size:16px}
+.modalbox .fld{margin-bottom:12px}
+.modalbox .fld label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
+.modalbox .fld small{color:var(--muted);font-weight:400}
+.modalbox input[type=file]{font-size:12.5px}
+.modalbox .actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+.modalbox button{padding:9px 16px;border-radius:9px;border:1px solid var(--line);background:#fff;cursor:pointer;font-size:13px;font-weight:600}
+.modalbox button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.upstatus{font-size:12.5px;margin-top:10px;min-height:16px}
+@media(max-width:1000px){.kpis{grid-template-columns:repeat(3,1fr)}.grid{grid-template-columns:1fr}}
+</style></head>
+<body>
+<header>
+  <div>
+    <h1>EPSILOG SAS — Tableau de bord P&amp;L</h1>
+    <div class="sub" id="meta"></div>
+  </div>
+  <div class="htools">
+    <select id="periodSel" title="Période"></select>
+    <button id="uploadBtn" class="primary">+ Importer un export</button>
+    <button id="logoutBtn" title="Se déconnecter">Déconnexion</button>
+  </div>
+</header>
+<div class="wrap">
+  <div id="empty" class="hidden">
+    <h2>Aucune donnée importée</h2>
+    <p>Cliquez sur « + Importer un export » pour déposer le P&amp;L mensuel (.xlsx).</p>
+  </div>
+  <div id="dash">
+    <div class="tabs">
+      <div class="tab on" data-blk="monthly">Mois</div>
+      <div class="tab" data-blk="cumul">Cumulé (YTD)</div>
+    </div>
+    <div class="kpis" id="kpis"></div>
+    <div class="grid">
+      <div class="panel"><h3>Répartition des charges opérationnelles</h3><canvas id="opexChart" height="220"></canvas></div>
+      <div class="panel"><h3>Réel vs Budget vs Forecast</h3><canvas id="bvaChart" height="220"></canvas></div>
+    </div>
+    <div class="grid">
+      <div class="panel full"><h3>Du chiffre d'affaires à l'EBITDA</h3><canvas id="bridgeChart" height="170"></canvas></div>
+    </div>
+    <div class="panel full">
+      <div class="ph">
+        <h3>Compte de résultat détaillé <small class="cap">— cliquez une ligne <span class="badge">›</span> pour le détail</small></h3>
+        <div class="colpick">
+          <button id="colBtn" class="colbtn">Colonnes ▾</button>
+          <div id="colMenu" class="colmenu hidden"></div>
+        </div>
+      </div>
+      <table id="pnl"><thead></thead><tbody></tbody></table>
+    </div>
+  </div>
+</div>
+<div class="backdrop" id="backdrop"></div>
+<div class="drawer" id="drawer">
+  <button class="x" id="xbtn">×</button>
+  <div class="dh"><h3 id="dTitle"></h3><div class="note" id="dNote"></div></div>
+  <div class="db" id="dBody"></div>
+</div>
+
+<div class="modal" id="upModal">
+  <div class="modalbox">
+    <h3>Importer un export mensuel</h3>
+    <div class="fld">
+      <label>P&amp;L (rapport 212-000) <small>— requis (.xlsx)</small></label>
+      <input type="file" id="fPnl" accept=".xlsx">
+    </div>
+    <div class="fld">
+      <label>Détail des coûts <small>— optionnel, active le drill-down OPEX</small></label>
+      <input type="file" id="fCost" accept=".xlsx">
+    </div>
+    <div class="fld">
+      <label>Détail COGS <small>— optionnel</small></label>
+      <input type="file" id="fCogs" accept=".xlsx">
+    </div>
+    <div class="upstatus" id="upStatus"></div>
+    <div class="actions">
+      <button id="upCancel">Annuler</button>
+      <button id="upSubmit" class="primary">Importer</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let DATA=null, BLK="monthly", acctLabels={};
+const COLS=[
+  {k:'actual',label:'Réel'},{k:'budget',label:'Budget'},{k:'d_bud',label:'Δ Bud',delta:true},
+  {k:'fc',label:'Forecast'},{k:'d_fc',label:'Δ FC',delta:true},{k:'py',label:'N-1'}
+];
+let visibleCols;
+try{visibleCols=new Set(JSON.parse(localStorage.getItem('pnlCols')||'[]'));}catch(e){visibleCols=null;}
+if(!visibleCols||!visibleCols.size)visibleCols=new Set(COLS.map(c=>c.k));
+function saveCols(){try{localStorage.setItem('pnlCols',JSON.stringify([...visibleCols]));}catch(e){}}
+
+const eur = n => (n==null||isNaN(n)) ? "—" : new Intl.NumberFormat('fr-FR',{maximumFractionDigits:0}).format(n)+" €";
+const eur0 = n => (n==null||isNaN(n)) ? "—" : new Intl.NumberFormat('fr-FR',{maximumFractionDigits:0}).format(n);
+const find = l => DATA.lines.find(x=>x.label===l);
+const val = (l,k)=>{const r=find(l);return r&&r.values?r.values[BLK][k]:null;};
+
+// ---------------------------- data layer ----------------------------
+async function api(path,opts){
+  const r=await fetch(path,opts);
+  if(r.status===401){location.href='/login';throw new Error('auth');}
+  if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error(j.detail||r.statusText);}
+  return r.json();
+}
+async function loadPeriods(){
+  const {periods,latest}=await api('/api/periods');
+  const sel=document.getElementById('periodSel');
+  sel.innerHTML=periods.map(p=>`<option value="${p.period}">${p.label||p.period}</option>`).join('');
+  return {periods,latest};
+}
+async function loadSnapshot(period){
+  DATA=await api('/api/snapshot'+(period?('?period='+encodeURIComponent(period)):''));
+  acctLabels={};
+  Object.values(DATA.drill||{}).forEach(d=>(d.accounts||[]).forEach(a=>{if(a.label)acctLabels[a.account]=a.label;}));
+  renderAll();
+}
+function renderAll(){
+  document.getElementById('meta').textContent =
+    [DATA.metadata.entity, DATA.metadata.period, DATA.metadata.scenario, DATA.metadata.run_by]
+      .map(s=>(s||'').replace(/^[^:]+:\s*/,'')).filter(Boolean).join("  •  ");
+  renderKpis();renderCharts();renderTable();
+}
+
+// ---------------------------- KPIs ----------------------------
+const KPI = [
+  ["Total Revenues","Chiffre d'affaires"],["Gross Profit Total","Marge brute"],
+  ["Total Costs","Charges (OPEX)"],["EBITDA after Central IC","EBITDA"],
+  ["EBIT","EBIT"],["Net result","Résultat net"],
+];
+function renderKpis(){
+  const host=document.getElementById('kpis');host.innerHTML="";
+  KPI.forEach(([lab,fr])=>{
+    const a=val(lab,"actual"), dB=val(lab,"d_bud");
+    const cum=(find(lab)?.values?.cumul?.actual);
+    const pol=(find(lab)||{}).polarity||"income";
+    let dcls="",dtxt="";
+    if(dB!=null){const good=(pol==='cost')?(dB<0):(dB>0);
+      dcls=Math.abs(dB)<1?"neu":(good?"pos":"neg");
+      dtxt=(dB>=0?"▲ ":"▼ ")+eur(Math.abs(dB))+" vs Bud";}
+    host.insertAdjacentHTML('beforeend',
+      `<div class="kpi"><div class="t">${fr}</div><div class="v">${eur(a)}</div>
+       <div class="d ${dcls}">${dtxt||"&nbsp;"}</div>
+       <div class="y">YTD ${eur(cum)}</div></div>`);
+  });
+}
+
+// ---------------------------- charts ----------------------------
+let charts={};
+function destroy(){Object.values(charts).forEach(c=>c&&c.destroy());charts={};}
+function renderCharts(){
+  destroy();
+  const opex=[["Personnel expenses","Personnel"],["Outsourcing","Outsourcing"],["Contractors","Sous-traitants"],
+    ["Occupancy","Locaux"],["ICT","Informatique"],["Marketing","Marketing"],["Other expenses","Autres"],
+    ["Travel","Déplacements"],["Office supplies","Fournitures"],["Company Cars","Véhicules"],["Law and consultancy fees","Conseil/juridique"]];
+  const od=opex.map(([l])=>val(l,"actual")||0), ol=opex.map(([,f])=>f);
+  charts.opex=new Chart(opexChart,{type:'bar',data:{labels:ol,datasets:[{data:od,backgroundColor:'#2563eb',borderRadius:5}]},
+    options:{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>eur(c.raw)}}},
+      scales:{x:{ticks:{callback:v=>eur0(v)}}}}});
+  const bva=[["Total Revenues","CA"],["Gross Profit Total","Marge brute"],["EBITDA after Central IC","EBITDA"],["EBIT","EBIT"]];
+  charts.bva=new Chart(bvaChart,{type:'bar',data:{labels:bva.map(b=>b[1]),datasets:[
+    {label:'Réel',data:bva.map(b=>val(b[0],"actual")),backgroundColor:'#2563eb',borderRadius:4},
+    {label:'Budget',data:bva.map(b=>val(b[0],"budget")),backgroundColor:'#cbd5e1',borderRadius:4},
+    {label:'Forecast',data:bva.map(b=>val(b[0],"fc")),backgroundColor:'#a78bfa',borderRadius:4}]},
+    options:{plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>c.dataset.label+": "+eur(c.raw)}}},
+      scales:{y:{ticks:{callback:v=>eur0(v)}}}}});
+  const rev0=val("Total Revenues","actual")||0, cogs=val("Total COGS","actual")||0,
+        opx=val("Total Costs","actual")||0, cap=val("Capitalized in-house services","actual")||0,
+        oi=val("Other income","actual")||0, eb=val("EBITDA after Central IC","actual")||0;
+  let run=0; const steps=[["CA",rev0],["- COGS",-cogs],["- OPEX",-opx],["+ Prod. immo.",cap],["+ Autres prod.",oi]];
+  const floats=[], cols=[];
+  steps.forEach(([n,v])=>{floats.push([run,run+v]);cols.push(v>=0?'#16a34a':'#dc2626');run+=v;});
+  floats.push([0,eb]);cols.push('#2563eb');
+  charts.bridge=new Chart(bridgeChart,{type:'bar',
+    data:{labels:[...steps.map(s=>s[0]),"EBITDA"],datasets:[{data:floats,backgroundColor:cols,borderRadius:4}]},
+    options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>eur(c.raw[1]-c.raw[0])}}},
+      scales:{y:{ticks:{callback:v=>eur0(v)}}}}});
+}
+
+// ---------------------------- table ----------------------------
+function initColPicker(){
+  const menu=document.getElementById('colMenu');
+  menu.innerHTML=COLS.map(c=>`<label><input type="checkbox" data-k="${c.k}" ${visibleCols.has(c.k)?'checked':''}> ${c.label}</label>`).join('');
+  menu.querySelectorAll('input').forEach(inp=>inp.addEventListener('change',()=>{
+    inp.checked?visibleCols.add(inp.dataset.k):visibleCols.delete(inp.dataset.k);
+    saveCols();renderTable();
+  }));
+  document.getElementById('colBtn').addEventListener('click',e=>{e.stopPropagation();menu.classList.toggle('hidden');});
+  menu.addEventListener('click',e=>e.stopPropagation());
+  document.addEventListener('click',()=>menu.classList.add('hidden'));
+}
+function renderTable(){
+  const cols=COLS.filter(c=>visibleCols.has(c.k));
+  document.querySelector('#pnl thead').innerHTML=
+    '<tr><th class="lbl">Poste</th>'+cols.map(c=>`<th>${c.label}</th>`).join('')+'</tr>';
+  const tb=document.querySelector('#pnl tbody');tb.innerHTML="";
+  const dcell=(x,pol)=>{ if(x==null)return "—"; if(Math.abs(x)<1)return `<span class="neu">${eur0(x)}</span>`;
+    const good=(pol==='cost')?(x<0):(x>0); return `<span class="${good?'pos':'neg'}">${eur0(x)}</span>`; };
+  DATA.lines.forEach((ln)=>{
+    if(ln.kind==="header"){
+      tb.insertAdjacentHTML('beforeend',`<tr class="hd"><td class="lbl" colspan="${cols.length+1}">${ln.label}</td></tr>`);return;
+    }
+    const v=ln.values?ln.values[BLK]:{};
+    const cls="l"+ln.level;
+    const drillable = (DATA.drill&&DATA.drill[ln.label]) ? "drill" : "";
+    const cells=cols.map(c=>c.delta?`<td>${dcell(v[c.k],ln.polarity)}</td>`:`<td>${eur0(v[c.k])}</td>`).join('');
+    tb.insertAdjacentHTML('beforeend',
+      `<tr class="${cls} ${drillable}" data-label="${ln.label}"><td class="lbl">${ln.label}</td>${cells}</tr>`);
+  });
+  tb.querySelectorAll('tr.drill').forEach(tr=>tr.addEventListener('click',()=>openDrawer(tr.dataset.label)));
+}
+
+// ---------------------------- drill-down drawer ----------------------------
+function acctName(a){return acctLabels[a]||"";}
+let drillState={poste:null,acct:null};
+function openDrawer(label){
+  if(!DATA.drill||!DATA.drill[label])return;
+  drillState={poste:label,acct:null};
+  document.getElementById('dTitle').textContent="Détail — "+label;
+  document.getElementById('dNote').innerHTML=DATA.drill[label].note||"";
+  renderDrawer();
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('backdrop').classList.add('open');
+}
+function renderDrawer(){
+  const d=DATA.drill[drillState.poste];if(!d)return;
+  const body=document.getElementById('dBody');
+  let h="";
+  if(d.meta){const ec=(d.meta.mapped||0)-(d.meta.pnl||0);
+    h+=`<div class="recon">Poste P&L (mois) : <b>${eur(d.meta.pnl)}</b><br>Comptes rattachés (provisoire) : <b>${eur(d.meta.mapped)}</b> &nbsp;·&nbsp; écart : <b class="${Math.abs(ec)<1?'pos':'neg'}">${eur(ec)}</b></div>`;}
+  if(!(d.accounts||[]).length){body.innerHTML=h+'<div class="nodrill">Aucun détail disponible pour ce poste (importez le fichier de détail correspondant).</div>';return;}
+  h+='<table><thead><tr><th class="lbl">Compte</th><th>Montant</th></tr></thead><tbody>';
+  (d.accounts||[]).forEach(a=>{
+    const sel=drillState.acct===a.account?'sel':'';
+    const lab=acctName(a.account)?`<span class="alab">${acctName(a.account)}</span>`:`<span class="alab muted">(libellé ?)</span>`;
+    h+=`<tr class="acctrow ${sel}" data-acct="${a.account}"><td class="lbl"><b>${a.account}</b> ${lab} <button class="ren" data-acct="${a.account}" title="Renommer ce compte">✎</button></td><td>${eur(a.sum)}</td></tr>`;
+  });
+  h+='</tbody></table>';
+  let lines=[];
+  if(drillState.acct){const acc=(d.accounts||[]).find(x=>x.account===drillState.acct);
+    lines=(acc?acc.lines:[]).map(l=>({...l,account:drillState.acct}));}
+  else{(d.accounts||[]).forEach(a=>a.lines.forEach(l=>lines.push({...l,account:a.account})));}
+  lines.sort((x,y)=>Math.abs(y.amount)-Math.abs(x.amount));
+  const head=drillState.acct
+    ? `Écritures — <b>${drillState.acct}</b> ${acctName(drillState.acct)} <button class="clearf">✕ tout afficher</button>`
+    : `Écritures — <small class="cap">cliquez un compte ci-dessus pour filtrer</small>`;
+  h+=`<h3 style="font-size:13px;margin:18px 0 8px">${head}</h3>`;
+  h+='<table><thead><tr><th class="lbl">Date</th><th class="lbl">Compte</th><th class="lbl">Libellé écriture</th><th>Montant</th></tr></thead><tbody>';
+  lines.slice(0,120).forEach(l=>{const nm=acctName(l.account)?` · ${acctName(l.account)}`:"";
+    h+=`<tr><td class="lbl">${l.date}</td><td class="lbl">${l.account}${nm}</td><td class="lbl">${l.text||""}</td><td>${eur(l.amount)}</td></tr>`;});
+  h+='</tbody></table>';
+  body.innerHTML=h;
+  body.querySelectorAll('tr.acctrow').forEach(tr=>tr.addEventListener('click',e=>{
+    if(e.target.classList.contains('ren'))return;
+    const a=tr.dataset.acct;drillState.acct=(drillState.acct===a?null:a);renderDrawer();
+  }));
+  body.querySelectorAll('button.ren').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();renameAcct(b.dataset.acct);}));
+  const cf=body.querySelector('.clearf');if(cf)cf.addEventListener('click',()=>{drillState.acct=null;renderDrawer();});
+}
+async function renameAcct(a){
+  const v=prompt("Libellé pour le compte "+a+" :",acctLabels[a]||"");
+  if(v===null)return;
+  const t=v.trim();
+  try{
+    await api('/api/labels/'+encodeURIComponent(a),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({label:t})});
+    if(t)acctLabels[a]=t;else delete acctLabels[a];
+    renderDrawer();
+  }catch(e){alert("Échec de l'enregistrement du libellé : "+e.message);}
+}
+function closeDrawer(){document.getElementById('drawer').classList.remove('open');document.getElementById('backdrop').classList.remove('open');}
+
+// ---------------------------- upload ----------------------------
+function openModal(){document.getElementById('upStatus').textContent="";document.getElementById('upModal').classList.add('open');}
+function closeModal(){document.getElementById('upModal').classList.remove('open');}
+async function doUpload(){
+  const pnl=document.getElementById('fPnl').files[0];
+  const st=document.getElementById('upStatus');
+  if(!pnl){st.style.color="#dc2626";st.textContent="Le fichier P&L est requis.";return;}
+  const fd=new FormData();fd.append('pnl',pnl);
+  const cost=document.getElementById('fCost').files[0]; if(cost)fd.append('cost',cost);
+  const cogs=document.getElementById('fCogs').files[0]; if(cogs)fd.append('cogs',cogs);
+  st.style.color="#64748b";st.textContent="Import en cours…";
+  try{
+    const r=await api('/api/upload',{method:'POST',body:fd});
+    st.style.color="#16a34a";
+    st.textContent=`Importé : ${r.label} (${r.period})`+(r.unmapped_accounts?` · ${r.unmapped_accounts} compte(s) non mappé(s)`:"");
+    await boot(r.period);
+    setTimeout(closeModal,900);
+  }catch(e){st.style.color="#dc2626";st.textContent="Échec : "+e.message;}
+}
+
+// ---------------------------- boot ----------------------------
+function wireStatic(){
+  initColPicker();
+  document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+    t.classList.add('on');BLK=t.dataset.blk;if(DATA)renderAll();
+  }));
+  document.getElementById('xbtn').onclick=closeDrawer;
+  document.getElementById('backdrop').onclick=closeDrawer;
+  document.getElementById('uploadBtn').onclick=openModal;
+  document.getElementById('upCancel').onclick=closeModal;
+  document.getElementById('upSubmit').onclick=doUpload;
+  document.getElementById('periodSel').addEventListener('change',e=>loadSnapshot(e.target.value));
+  document.getElementById('logoutBtn').onclick=async()=>{await fetch('/api/logout',{method:'POST'});location.href='/login';};
+}
+async function boot(forcePeriod){
+  const {periods,latest}=await loadPeriods();
+  const dash=document.getElementById('dash'), empty=document.getElementById('empty');
+  if(!periods.length){dash.classList.add('hidden');empty.classList.remove('hidden');return;}
+  empty.classList.add('hidden');dash.classList.remove('hidden');
+  const target=forcePeriod||latest;
+  document.getElementById('periodSel').value=target;
+  await loadSnapshot(target);
+}
+wireStatic();
+boot().catch(e=>{if(e.message!=='auth')console.error(e);});
+</script>
+</body></html>
