@@ -50,7 +50,10 @@ tr.drill:hover{background:#eff6ff}
 .colmenu label{display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:13px;border-radius:6px;cursor:pointer;white-space:nowrap}
 .colmenu label:hover{background:var(--soft)}
 .colmenu input{accent-color:var(--accent)}
-.tabs{display:flex;gap:8px;margin-bottom:14px}
+.toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.tabs{display:flex;gap:8px}
+.cmp{font-size:12.5px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:8px}
+.cmp select{font-size:12.5px;font-weight:600;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 10px;background:#fff;cursor:pointer}
 .tab{padding:7px 14px;border:1px solid var(--line);border-radius:999px;background:#fff;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--muted)}
 .tab.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 .drawer{position:fixed;top:0;right:-560px;width:540px;max-width:92vw;height:100%;background:#fff;
@@ -111,9 +114,17 @@ button.ren:hover{color:var(--accent)!important}
     <p>Cliquez sur « + Importer un export » pour déposer le P&amp;L mensuel (.xlsx).</p>
   </div>
   <div id="dash">
-    <div class="tabs">
-      <div class="tab on" data-blk="monthly">Mois</div>
-      <div class="tab" data-blk="cumul">Cumulé (YTD)</div>
+    <div class="toolbar">
+      <div class="tabs">
+        <div class="tab on" data-blk="monthly">Mois</div>
+        <div class="tab" data-blk="cumul">Cumulé (YTD)</div>
+      </div>
+      <label class="cmp">Comparer à
+        <select id="cmpSel">
+          <option value="d_bud">Budget</option>
+          <option value="d_fc">Forecast</option>
+        </select>
+      </label>
     </div>
     <div class="kpis" id="kpis"></div>
     <div class="grid">
@@ -167,6 +178,7 @@ button.ren:hover{color:var(--accent)!important}
 
 <script>
 let DATA=null, BLK="monthly", acctLabels={};
+let CMP = (localStorage.getItem('kpiCmp')==='d_fc') ? 'd_fc' : 'd_bud';
 const COLS=[
   {k:'actual',label:'Réel'},{k:'budget',label:'Budget'},{k:'d_bud',label:'Δ Bud',delta:true},
   {k:'fc',label:'Forecast'},{k:'d_fc',label:'Δ FC',delta:true},{k:'py',label:'N-1'}
@@ -216,13 +228,14 @@ const KPI = [
 function renderKpis(){
   const host=document.getElementById('kpis');host.innerHTML="";
   KPI.forEach(([lab,fr])=>{
-    const a=val(lab,"actual"), dB=val(lab,"d_bud");
+    const a=val(lab,"actual"), dB=val(lab,CMP);
     const cum=(find(lab)?.values?.cumul?.actual);
     const pol=(find(lab)||{}).polarity||"income";
+    const sfx=CMP==='d_fc'?"vs FC":"vs Bud";
     let dcls="",dtxt="";
     if(dB!=null){const good=(pol==='cost')?(dB<0):(dB>0);
       dcls=Math.abs(dB)<1?"neu":(good?"pos":"neg");
-      dtxt=(dB>=0?"▲ ":"▼ ")+eur(Math.abs(dB))+" vs Bud";}
+      dtxt=(dB>=0?"▲ ":"▼ ")+eur(Math.abs(dB))+" "+sfx;}
     host.insertAdjacentHTML('beforeend',
       `<div class="kpi"><div class="t">${fr}</div><div class="v">${eur(a)}</div>
        <div class="d ${dcls}">${dtxt||"&nbsp;"}</div>
@@ -387,6 +400,9 @@ function wireStatic(){
   document.getElementById('uploadBtn').onclick=openModal;
   document.getElementById('upCancel').onclick=closeModal;
   document.getElementById('upSubmit').onclick=doUpload;
+  const cmpSel=document.getElementById('cmpSel');
+  cmpSel.value=CMP;
+  cmpSel.addEventListener('change',e=>{CMP=e.target.value;localStorage.setItem('kpiCmp',CMP);if(DATA)renderKpis();});
   document.getElementById('periodSel').addEventListener('change',e=>loadSnapshot(e.target.value));
   document.getElementById('logoutBtn').onclick=async()=>{await fetch('/api/logout',{method:'POST'});location.href='/login';};
 }
