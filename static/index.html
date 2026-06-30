@@ -26,6 +26,7 @@ header .sub{color:#94a3b8;font-size:12.5px;margin-top:4px}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
 .panel h3{margin:0 0 12px;font-size:14px}
 .full{grid-column:1/-1}
+.bridgewrap{height:230px;position:relative}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th,td{padding:7px 10px;text-align:right;white-space:nowrap}
 th{color:var(--muted);font-weight:600;border-bottom:2px solid var(--line);font-size:11.5px;text-transform:uppercase;letter-spacing:.4px}
@@ -120,7 +121,7 @@ button.ren:hover{color:var(--accent)!important}
       <div class="panel"><h3>Réel vs Budget vs Forecast</h3><canvas id="bvaChart" height="220"></canvas></div>
     </div>
     <div class="grid">
-      <div class="panel full"><h3>Du chiffre d'affaires à l'EBITDA</h3><canvas id="bridgeChart" height="170"></canvas></div>
+      <div class="panel full"><h3>Du chiffre d'affaires à l'EBITDA</h3><div class="bridgewrap"><canvas id="bridgeChart"></canvas></div></div>
     </div>
     <div class="panel full">
       <div class="ph">
@@ -257,7 +258,8 @@ function renderCharts(){
   floats.push([0,eb]);cols.push('#2563eb');
   charts.bridge=new Chart(bridgeChart,{type:'bar',
     data:{labels:[...steps.map(s=>s[0]),"EBITDA"],datasets:[{data:floats,backgroundColor:cols,borderRadius:4}]},
-    options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>eur(c.raw[1]-c.raw[0])}}},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>eur(c.raw[1]-c.raw[0])}}},
       scales:{y:{ticks:{callback:v=>eur0(v)}}}}});
 }
 
