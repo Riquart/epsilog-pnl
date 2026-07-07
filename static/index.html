@@ -74,8 +74,8 @@ box-shadow:-12px 0 40px rgba(15,23,42,.18);transition:right .25s ease;z-index:50
 .drawer .dh .note{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.4}
 .drawer .db{overflow-y:auto;overflow-x:hidden;padding:8px 14px 30px}
 .drawer table{width:100%}
-.drawer th,.drawer td{white-space:normal;overflow-wrap:anywhere;vertical-align:top}
-.drawer td:last-child,.drawer th:last-child{white-space:nowrap;text-align:right}
+.drawer th,.drawer td{vertical-align:top}
+.drawer td.wrap{white-space:normal;overflow-wrap:break-word}
 .x{position:absolute;top:14px;right:16px;cursor:pointer;color:var(--muted);font-size:20px;border:none;background:none}
 .backdrop{position:fixed;inset:0;background:rgba(15,23,42,.35);opacity:0;pointer-events:none;transition:.25s;z-index:40}
 .backdrop.open{opacity:1;pointer-events:auto}
@@ -418,7 +418,7 @@ function renderDrawer(){
   (d.accounts||[]).forEach(a=>{
     const sel=drillState.acct===a.account?'sel':'';
     const lab=acctName(a.account)?`<span class="alab">${acctName(a.account)}</span>`:`<span class="alab muted">(libellé ?)</span>`;
-    h+=`<tr class="acctrow ${sel}" data-acct="${a.account}"><td class="lbl"><b>${a.account}</b> ${lab} <button class="ren" data-acct="${a.account}" title="Renommer ce compte">✎</button> <button class="reassign" data-acct="${a.account}" title="Déplacer ce compte vers un autre poste">⇄</button></td><td>${eur(a.sum)}</td></tr>`;
+    h+=`<tr class="acctrow ${sel}" data-acct="${a.account}"><td class="lbl wrap"><b>${a.account}</b> ${lab} <button class="ren" data-acct="${a.account}" title="Renommer ce compte">✎</button> <button class="reassign" data-acct="${a.account}" title="Déplacer ce compte vers un autre poste">⇄</button></td><td>${eur(a.sum)}</td></tr>`;
   });
   h+='</tbody></table>';
   let lines=[];
@@ -432,7 +432,7 @@ function renderDrawer(){
   h+=`<h3 style="font-size:13px;margin:18px 0 8px">${head}</h3>`;
   h+='<table><thead><tr><th class="lbl">Date</th><th class="lbl">Compte</th><th class="lbl">Libellé écriture</th><th>Montant</th></tr></thead><tbody>';
   lines.slice(0,120).forEach(l=>{const nm=acctName(l.account)?` · ${acctName(l.account)}`:"";
-    h+=`<tr><td class="lbl">${l.date}</td><td class="lbl">${l.account}${nm}</td><td class="lbl">${l.text||""}</td><td>${eur(l.amount)}</td></tr>`;});
+    h+=`<tr><td class="lbl">${l.date}</td><td class="lbl">${l.account}${nm}</td><td class="lbl wrap">${l.text||""}</td><td>${eur(l.amount)}</td></tr>`;});
   h+='</tbody></table>';
   body.innerHTML=h;
   body.querySelectorAll('tr.acctrow').forEach(tr=>tr.addEventListener('click',e=>{
