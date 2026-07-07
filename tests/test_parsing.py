@@ -106,6 +106,27 @@ def test_assemble_snapshot_roundtrip():
     assert served["unmapped_accounts"] == []
 
 
+def test_cogs_orphans_not_in_personnel():
+    """COGS-file rows with no account code (e.g. 'Reading Card …') must not be
+    forced onto the payroll/Personnel poste; they land in a flagged bucket."""
+    with open(PNL_FILE, "rb") as f:
+        pnl_b = f.read()
+    with open(COST_FILE, "rb") as f:
+        cost_b = f.read()
+    with open(COGS_FILE, "rb") as f:
+        cogs_b = f.read()
+    served = _prepare_snapshot(assemble_snapshot(pnl_b, cost_b, cogs_b))
+    personnel_accts = {
+        a["account"] for a in served["drill"].get("Personnel expenses", {}).get("accounts", [])
+    }
+    assert "(sans compte)" not in personnel_accts
+    # No 'Reading Card' posting should appear under Personnel expenses.
+    for a in served["drill"].get("Personnel expenses", {}).get("accounts", []):
+        assert not any("Reading Card" in (l.get("text") or "") for l in a["lines"])
+    # The unattributed rows are surfaced as unmapped.
+    assert any(u["account"] == "(sans compte)" for u in served["unmapped_accounts"])
+
+
 def test_opex_mapping_reconciles_to_total_costs():
     """The official mapping must tie the sum of all mapped OPEX accounts to the
     P&L monthly Total Costs (915 247,51 €). Per-poste gaps are expected

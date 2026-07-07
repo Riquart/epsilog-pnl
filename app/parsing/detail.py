@@ -23,7 +23,7 @@ AMOUNT_COL = "Montant en devise interne"
 DATE_COL = "Date de la pièce"
 TEXT_COL = "Texte"
 
-_PAYROLL_KEY = "64-PAIE"  # synthetic account for the leading payroll block
+UNATTRIBUTED = "(sans compte)"  # detail rows we cannot tie to any GL account
 _COMPTE_RE = re.compile(r"\s*Compte\s*([0-9A-Z]+)")
 _LEAD_CODE_RE = re.compile(r"\s*(\d{6,8})")
 
@@ -37,12 +37,16 @@ def _parse_compte(x) -> Optional[str]:
     return None
 
 
-def _lead_account(text) -> str:
-    """Account for a payroll-block row: leading 6-8 digit code in its text."""
+def _lead_account(text) -> Optional[str]:
+    """Account for a row lacking a ``Compte`` header: the leading 6-8 digit code in
+    its text (the payroll block carries these, e.g. ``64110100 GROSS SALARIES``).
+    Returns None when there is no such code — the row is genuinely unattributed and
+    must NOT be forced onto the payroll (that mislabels COGS lines as Personnel)."""
     if isinstance(text, str):
         m = _LEAD_CODE_RE.match(text)
-        return m.group(1) if m else _PAYROLL_KEY
-    return _PAYROLL_KEY
+        if m:
+            return m.group(1)
+    return None
 
 
 def parse_detail(src: ExcelSource, max_lines_per_account: int = 200) -> Dict[str, dict]:
@@ -70,7 +74,7 @@ def parse_detail(src: ExcelSource, max_lines_per_account: int = 200) -> Dict[str
     for _, row in detail.iterrows():
         acc = row["_account"]
         if pd.isna(acc):
-            acc = _lead_account(row.get(TEXT_COL))
+            acc = _lead_account(row.get(TEXT_COL)) or UNATTRIBUTED
         else:
             acc = str(acc)
         amt = row.get(AMOUNT_COL)

@@ -79,7 +79,7 @@ class Mapper:
         for acc, info in accounts.items():
             poste = self.poste_for(acc)
             if poste is None:
-                poste = "Other expenses"
+                poste = "Non rattaché"  # kept out of real P&L postes; flagged below
                 unmapped.append(acc)
             by_poste.setdefault(poste, []).append((acc, info))
         return by_poste, unmapped
