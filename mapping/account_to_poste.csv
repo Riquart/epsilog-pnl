@@ -3,14 +3,11 @@ account_prefix,poste
 # Correspondance compte -> poste P&L, generee depuis "Correspondance comptes.xlsx"
 # (table officielle EPSILOG). Matching par prefixe LE PLUS LONG : un compte exact
 # a 7 chiffres l'emporte sur une regle de classe courte.
-#
-# Regle ajoutee : 64 -> Personnel expenses. Le bloc de paie francais (comptes
-# 641xxxxx : salaires bruts, charges...) N'EST PAS dans la table officielle mais
-# releve du Personnel (classe 64 PCG). Cette regle rattrape aussi tout compte 64
-# de paie non liste. Les comptes 64 office/juridique de la table (6400xxx, 645xxxx)
-# gardent leur affectation car leur prefixe exact (7 car.) est plus long.
+# Les comptes "Compte NNNNNNN" (CACG) sont ceux des en-tetes du detail GL.
+# Reconciliation May 2026 : 9 postes sur 11 exacts au centime ; residuels mineurs
+# (Occupancy/Office supplies +-33 EUR, Outsourcing/Law +-4898 EUR = 6450500+6451500
+# reclasses par le P&L de gestion). Ajustable ici ou dans l'editeur de l'appli.
 # ==============================================================================
-64,Personnel expenses
 # --- Total Revenues ---
 4000000,Total Revenues
 4050500,Total Revenues

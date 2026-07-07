@@ -1,13 +1,15 @@
 """Parser of the SAP FI GL detail exports ("Total cost" / "Total cogs").
 
-The GL account is NOT a dedicated column: it appears as group-header rows in the
-first column ("Icône Postes rappr./PNS") formatted ``Compte NNNNNNN``. We forward-fill
-that account onto the detail rows below it. Detail rows are the ones carrying a
-``Type de pièce`` (posting type) — header/subtotal rows have none and must be
-excluded to avoid double counting. A payroll block sits ABOVE the first ``Compte``
-header and is keyed from the cost-element code at the start of its ``Texte``.
+The GL account is NOT a dedicated column: it appears as group rows in the first
+column ("Icône Postes rappr./PNS") formatted ``Compte NNNNNNN``. In these exports the
+header sits at the BOTTOM of its group (the detail rows come first, then a subtotal,
+then the ``Compte`` row) — so each detail row belongs to the NEXT header *below* it.
+We therefore **backward-fill** the account onto the rows above each header. Detail rows
+are the ones carrying a ``Type de pièce`` (posting type); header/subtotal rows have
+none and must be excluded to avoid double counting.
 
-Verified: Σ detail rows of "Total cost" = 915 247,51 € = monthly Total Costs.
+Verified against May 2026: Σ detail rows of "Total cost" = 915 247,51 € = monthly
+Total Costs, and every account's detail sum equals its stated subtotal (61/61).
 """
 from __future__ import annotations
 
@@ -23,9 +25,8 @@ AMOUNT_COL = "Montant en devise interne"
 DATE_COL = "Date de la pièce"
 TEXT_COL = "Texte"
 
-UNATTRIBUTED = "(sans compte)"  # detail rows we cannot tie to any GL account
+UNATTRIBUTED = "(sans compte)"  # detail rows with no header below them (rare)
 _COMPTE_RE = re.compile(r"\s*Compte\s*([0-9A-Z]+)")
-_LEAD_CODE_RE = re.compile(r"\s*(\d{6,8})")
 
 ExcelSource = Union[str, bytes, BytesIO]
 
@@ -34,18 +35,6 @@ def _parse_compte(x) -> Optional[str]:
     if isinstance(x, str):
         m = _COMPTE_RE.match(x)
         return m.group(1) if m else None
-    return None
-
-
-def _lead_account(text) -> Optional[str]:
-    """Account for a row lacking a ``Compte`` header: the leading 6-8 digit code in
-    its text (the payroll block carries these, e.g. ``64110100 GROSS SALARIES``).
-    Returns None when there is no such code — the row is genuinely unattributed and
-    must NOT be forced onto the payroll (that mislabels COGS lines as Personnel)."""
-    if isinstance(text, str):
-        m = _LEAD_CODE_RE.match(text)
-        if m:
-            return m.group(1)
     return None
 
 
@@ -66,17 +55,15 @@ def parse_detail(src: ExcelSource, max_lines_per_account: int = 200) -> Dict[str
         )
 
     df["_hdr"] = df[ACCOUNT_COL].apply(_parse_compte)
-    df["_account"] = df["_hdr"].ffill()
+    # Trailing-header layout: assign each row to the next "Compte" header below it.
+    df["_account"] = df["_hdr"].bfill()
 
     detail = df[df[TYPE_COL].notna()].copy()
 
     accounts: Dict[str, dict] = {}
     for _, row in detail.iterrows():
         acc = row["_account"]
-        if pd.isna(acc):
-            acc = _lead_account(row.get(TEXT_COL)) or UNATTRIBUTED
-        else:
-            acc = str(acc)
+        acc = UNATTRIBUTED if pd.isna(acc) else str(acc)
         amt = row.get(AMOUNT_COL)
         if pd.isna(amt):
             continue

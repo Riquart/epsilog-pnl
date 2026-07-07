@@ -78,18 +78,35 @@ def test_cost_detail_reconciliation():
     assert abs(total_detail(accounts) - 915_247.51) <= 0.01
 
 
-def test_account_headers_detected():
+def test_account_headers_detected_and_backfilled():
     accounts = parse_detail(COST_FILE)
     for acc in ("6000000", "6054700", "6001500FR"):
         assert acc in accounts, f"account header {acc} not detected"
-    # Contractors account ties out to the P&L poste
-    assert abs(accounts["6054700"]["sum"] - 166_618.5) <= 1.0
+    # Trailing-header layout: the leading payroll block backfills onto CACG 6000000.
+    assert abs(accounts["6000000"]["sum"] - 298_244.5) <= 1.0
 
 
 def test_every_detail_row_has_account():
     accounts = parse_detail(COST_FILE)
-    # No bucket key should be empty/None; the synthetic payroll key is allowed.
-    assert all(k for k in accounts)
+    assert all(k for k in accounts)  # no empty/None bucket keys
+
+
+def test_poste_reconciliation_after_backfill():
+    """With backward-fill + the official mapping, most postes tie out to the P&L
+    to the euro (this was masked by the earlier forward-fill bug)."""
+    with open(PNL_FILE, "rb") as f:
+        pnl_b = f.read()
+    with open(COST_FILE, "rb") as f:
+        cost_b = f.read()
+    served = _prepare_snapshot(assemble_snapshot(pnl_b, cost_b))
+
+    def poste_sum(p):
+        return sum(a["sum"] for a in served["drill"].get(p, {}).get("accounts", []))
+
+    assert abs(poste_sum("Personnel expenses") - 514_822) <= 1
+    assert abs(poste_sum("Contractors") - 166_618) <= 1
+    assert abs(poste_sum("ICT") - 23_343) <= 1
+    assert abs(poste_sum("Marketing") - 14_938) <= 1
 
 
 def test_assemble_snapshot_roundtrip():
@@ -106,9 +123,9 @@ def test_assemble_snapshot_roundtrip():
     assert served["unmapped_accounts"] == []
 
 
-def test_cogs_orphans_not_in_personnel():
-    """COGS-file rows with no account code (e.g. 'Reading Card …') must not be
-    forced onto the payroll/Personnel poste; they land in a flagged bucket."""
+def test_cogs_reading_cards_under_hardware():
+    """The 'Reading Card …' postings sit above the `Compte 5050500` header, so they
+    backfill onto 5050500 → COGS Hardware — not onto Personnel."""
     with open(PNL_FILE, "rb") as f:
         pnl_b = f.read()
     with open(COST_FILE, "rb") as f:
@@ -116,15 +133,17 @@ def test_cogs_orphans_not_in_personnel():
     with open(COGS_FILE, "rb") as f:
         cogs_b = f.read()
     served = _prepare_snapshot(assemble_snapshot(pnl_b, cost_b, cogs_b))
-    personnel_accts = {
-        a["account"] for a in served["drill"].get("Personnel expenses", {}).get("accounts", [])
-    }
-    assert "(sans compte)" not in personnel_accts
-    # No 'Reading Card' posting should appear under Personnel expenses.
+    hw = served["drill"].get("COGS Hardware", {})
+    hw_accts = {a["account"] for a in hw.get("accounts", [])}
+    assert "5050500" in hw_accts
+    reading = [
+        l for a in hw.get("accounts", []) for l in a["lines"]
+        if "Reading Card" in (l.get("text") or "")
+    ]
+    assert reading, "reading-card postings should be attached to COGS Hardware"
+    # And never under Personnel.
     for a in served["drill"].get("Personnel expenses", {}).get("accounts", []):
         assert not any("Reading Card" in (l.get("text") or "") for l in a["lines"])
-    # The unattributed rows are surfaced as unmapped.
-    assert any(u["account"] == "(sans compte)" for u in served["unmapped_accounts"])
 
 
 def test_opex_mapping_reconciles_to_total_costs():

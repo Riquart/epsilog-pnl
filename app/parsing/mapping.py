@@ -18,12 +18,10 @@ _DEFAULT_CSV = os.path.join(
 )
 
 PROVISIONAL_BANNER = (
-    "Rattachement basé sur la <b>table de correspondance officielle</b> "
-    "(compte → poste). Le total des charges se réconcilie au centime, mais les "
-    "postes de gestion du P&L sont une <b>reclassification</b> : le regroupement "
-    "peut différer de la catégorie comptable d'un compte (ex. un compte « Outsourcing IC » "
-    "peut être présenté en Contractors dans le P&L). L'écart affiché par poste reflète "
-    "cette reclassification."
+    "Rattachement basé sur la <b>table de correspondance officielle</b> (compte → poste), "
+    "avec les écritures regroupées par compte SAP. La réconciliation avec le P&L est "
+    "exacte pour la plupart des postes ; quelques comptes peuvent être <b>reclassés</b> "
+    "par le P&L de gestion (écart affiché ci-dessous)."
 )
 
 

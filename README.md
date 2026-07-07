@@ -109,17 +109,17 @@ tests/test_parsing.py
 Le détail des coûts se rapproche **au centime** du P&L (Σ écritures *Total cost* = **915 247,51 €**
 = Total Costs mensuel). Le drill-down par **compte** est donc fiable.
 
-Le mapping `mapping/account_to_poste.csv` est généré depuis la **table de correspondance
-officielle EPSILOG** (compte → poste), au niveau du **compte exact** (7 chiffres). Une seule
-règle de classe est ajoutée : `64 → Personnel expenses`, car le bloc de paie français
-(comptes `641xxxxx` : salaires bruts, charges) n'est pas listé dans la table mais relève du
-Personnel. Résultat : **le total OPEX se réconcilie au centime** et **0 compte non mappé**.
+**Structure des exports GL** : le compte apparaît en **en-tête de pied de groupe**
+(`Compte NNNNNNN` en colonne A, *après* ses écritures). Le parseur fait donc un
+**backward-fill** (chaque écriture est rattachée au compte situé en dessous d'elle). Le
+mapping `mapping/account_to_poste.csv` est ensuite généré depuis la **table de correspondance
+officielle EPSILOG** (compte → poste), au niveau du **compte exact**.
 
-⚠️ **Écarts par poste** : les postes de gestion du P&L sont une **reclassification** — le
-regroupement peut différer de la catégorie comptable d'un compte. Exemple : le compte `6054700`
-(166 618 €, catégorie « Outsourcing IC » dans la table) correspond exactement au poste *Contractors*
-du P&L. Le tiroir de drill-down affiche donc, pour chaque poste, le montant P&L, le montant rattaché
-et l'**écart** résiduel. Ces écarts sont normaux et n'affectent pas le total.
+Résultat (mai 2026) : **9 postes sur 11 réconcilient au centime** avec le P&L (Personnel,
+Contractors, ICT, Marketing, Travel, Company Cars, Other expenses…), 0 compte non mappé.
+Résiduels mineurs : Occupancy/Office supplies ±33 €, et Outsourcing/Law ±4 898 € (comptes
+`6450500` + `6451500` reclassés par le P&L de gestion). Le tiroir de drill-down affiche pour
+chaque poste le montant P&L, le montant rattaché et l'**écart** éventuel.
 
 **Édition du mapping dans l'application** : le bouton **« Mapping »** (en-tête) ouvre un éditeur
 (ajout/modif/suppression de règles, filtre, réinitialisation). On peut aussi **déplacer un compte**
