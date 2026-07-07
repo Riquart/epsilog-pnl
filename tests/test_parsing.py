@@ -145,6 +145,13 @@ def test_cogs_reading_cards_under_hardware():
     for a in served["drill"].get("Personnel expenses", {}).get("accounts", []):
         assert not any("Reading Card" in (l.get("text") or "") for l in a["lines"])
 
+    # The two COGS sub-postes present in the file reconcile to the euro.
+    def poste_sum(p):
+        return sum(a["sum"] for a in served["drill"].get(p, {}).get("accounts", []))
+
+    assert abs(poste_sum("COGS Professional services") - 18_074.14) <= 0.5
+    assert abs(poste_sum("COGS Other recurring service fees") - 17_108.0) <= 0.5
+
 
 def test_opex_mapping_reconciles_to_total_costs():
     """The official mapping must tie the sum of all mapped OPEX accounts to the

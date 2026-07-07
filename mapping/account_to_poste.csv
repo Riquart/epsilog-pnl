@@ -26,11 +26,13 @@ account_prefix,poste
 4501520,Other income
 4503500,Other income
 # --- COGS ventilés par sous-poste (One Time vs Recurring) ---
-# 5101500 reconcilie exactement avec "COGS Other recurring service fees" (17 108 €).
+# Recon. mai 2026 : Professional services = 5100000+5101500 = 18 074 € (= P&L exact) ;
+# Recurring = 5201500 (App host ASP) = 17 108 € (= P&L exact). COGS Hardware (5050500)
+# reste incomplet dans l'export (le gros du HW n'y figure pas).
 5050500,COGS Hardware
 5100000,COGS Professional services
+5101500,COGS Professional services
 5451000,COGS Professional services
-5101500,COGS Other recurring service fees
 5201500,COGS Other recurring service fees
 # --- Personnel expenses ---
 6000000,Personnel expenses
