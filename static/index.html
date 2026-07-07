@@ -44,8 +44,11 @@ tr.drill:hover{background:#eff6ff}
 .ph{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .ph h3{margin:0}
 .ph-actions{display:flex;gap:8px;align-items:center;flex:none}
-.noteflag{cursor:pointer;color:#d97706;font-size:12px;margin-right:2px}
+.noteflag{cursor:pointer;color:#d97706;font-size:12px;margin-right:4px}
 .noteflag:hover{color:#b45309}
+.noteadd{opacity:0;border:none;background:none;cursor:pointer;color:#cbd5e1;font-size:11px;padding:0 4px;margin-left:4px;transition:opacity .12s}
+tr:hover .noteadd{opacity:1}
+.noteadd:hover{color:var(--accent)}
 #noteText{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;font-size:13px;font-family:inherit;resize:vertical}
 #noteModal .modalbox button.danger{margin-right:auto;color:var(--neg);border-color:#fecaca}
 #noteModal .modalbox button.danger:hover{background:#fef2f2}
@@ -383,12 +386,13 @@ function renderTable(){
     const cls="l"+ln.level;
     const drillable = (DATA.drill&&DATA.drill[ln.label]) ? "drill" : "";
     const flag = NOTES[ln.label] ? `<span class="noteflag" data-note="${esc(ln.label)}" title="Voir la note : ${esc(NOTES[ln.label])}">⚠</span>` : '';
+    const addNote = `<button class="noteadd" data-note="${esc(ln.label)}" title="Ajouter une note sur cette ligne">✎</button>`;
     const cells=cols.map(c=>c.delta?`<td>${dcell(v[c.k],ln.polarity)}</td>`:`<td>${eur0(v[c.k])}</td>`).join('');
     tb.insertAdjacentHTML('beforeend',
-      `<tr class="${cls} ${drillable}" data-label="${esc(ln.label)}"><td class="lbl">${flag}${ln.label}</td>${cells}</tr>`);
+      `<tr class="${cls} ${drillable}" data-label="${esc(ln.label)}"><td class="lbl">${flag}${ln.label}${addNote}</td>${cells}</tr>`);
   });
   tb.querySelectorAll('tr.drill').forEach(tr=>tr.addEventListener('click',()=>openDrawer(tr.dataset.label)));
-  tb.querySelectorAll('.noteflag').forEach(f=>f.addEventListener('click',e=>{e.stopPropagation();openNote(f.dataset.note);}));
+  tb.querySelectorAll('.noteflag,.noteadd').forEach(f=>f.addEventListener('click',e=>{e.stopPropagation();openNote(f.dataset.note);}));
 }
 
 // ---------------------------- drill-down drawer ----------------------------
@@ -561,7 +565,11 @@ async function doUpload(){
 function openNote(label){
   const sel=document.getElementById('noteLine');
   const lines=DATA.lines.filter(l=>l.kind!=='header');
-  sel.innerHTML=lines.map(l=>`<option value="${esc(l.label)}">${l.label}</option>`).join('');
+  sel.innerHTML=lines.map(l=>{
+    const indent='   '.repeat(l.level||0);
+    const bullet=(l.kind==='kpi')?'▸ ':'';
+    return `<option value="${esc(l.label)}">${indent}${bullet}${l.label}</option>`;
+  }).join('');
   if(label) sel.value=label;
   const cur=sel.value;
   document.getElementById('noteText').value=NOTES[cur]||"";
