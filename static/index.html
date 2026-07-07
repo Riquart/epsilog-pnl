@@ -62,7 +62,10 @@ box-shadow:-12px 0 40px rgba(15,23,42,.18);transition:right .25s ease;z-index:50
 .drawer .dh{padding:16px 20px;border-bottom:1px solid var(--line)}
 .drawer .dh h3{margin:0;font-size:15px}
 .drawer .dh .note{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.4}
-.drawer .db{overflow:auto;padding:8px 14px 30px}
+.drawer .db{overflow-y:auto;overflow-x:hidden;padding:8px 14px 30px}
+.drawer table{width:100%}
+.drawer th,.drawer td{white-space:normal;overflow-wrap:anywhere;vertical-align:top}
+.drawer td:last-child,.drawer th:last-child{white-space:nowrap;text-align:right}
 .x{position:absolute;top:14px;right:16px;cursor:pointer;color:var(--muted);font-size:20px;border:none;background:none}
 .backdrop{position:fixed;inset:0;background:rgba(15,23,42,.35);opacity:0;pointer-events:none;transition:.25s;z-index:40}
 .backdrop.open{opacity:1;pointer-events:auto}
@@ -126,7 +129,7 @@ button.reassign:hover{color:var(--accent)!important}
   </div>
   <div class="htools">
     <select id="periodSel" title="Période"></select>
-    <button id="uploadBtn" class="primary">+ Importer un export</button>
+    <button id="uploadBtn" class="primary">Importer</button>
     <button id="mapBtn" title="Modifier le rattachement comptes → postes">Mapping</button>
     <button id="logoutBtn" title="Se déconnecter">Déconnexion</button>
   </div>
