@@ -94,6 +94,28 @@ button.ren:hover{color:var(--accent)!important}
 .modalbox button{padding:9px 16px;border-radius:9px;border:1px solid var(--line);background:#fff;cursor:pointer;font-size:13px;font-weight:600}
 .modalbox button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
 .upstatus{font-size:12.5px;margin-top:10px;min-height:16px}
+.mapbox{width:620px}
+.maphint{font-size:12px;color:var(--muted);margin:0 0 14px;line-height:1.5}
+.maphint code{background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:11.5px}
+.maptools{display:flex;gap:8px;margin-bottom:10px}
+.maptools input{flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px}
+.maptools button{padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer;font-size:12.5px;font-weight:600}
+.maptools button:hover{background:var(--soft)}
+.maprows{max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:6px}
+.maprow{display:flex;gap:8px;align-items:center;padding:4px 6px}
+.maprow input{width:150px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;font-size:12.5px;font-family:ui-monospace,Menlo,monospace}
+.maprow select{flex:1;padding:6px 8px;border:1px solid var(--line);border-radius:7px;font-size:12.5px;background:#fff}
+.maprow button.del{border:none;background:none;color:#cbd5e1;font-size:16px;cursor:pointer;padding:0 6px}
+.maprow button.del:hover{color:var(--neg)}
+.reassignpop{position:absolute;z-index:70;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(15,23,42,.2);padding:10px;width:250px}
+.reassignpop .rp-t{font-size:11.5px;color:var(--muted);margin-bottom:6px;font-weight:600}
+.reassignpop select{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:7px;font-size:12.5px;margin-bottom:8px}
+.reassignpop .rp-act{display:flex;gap:6px;justify-content:flex-end}
+.reassignpop button{padding:5px 12px;border:1px solid var(--line);border-radius:7px;background:#fff;cursor:pointer;font-size:12px;font-weight:600}
+.reassignpop button.rp-ok{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.reassign{border:none;background:none;cursor:pointer;color:#cbd5e1;font-size:12px;padding:0 4px}
+tr.acctrow:hover button.reassign{color:#94a3b8}
+button.reassign:hover{color:var(--accent)!important}
 @media(max-width:1000px){.kpis{grid-template-columns:repeat(3,1fr)}.grid{grid-template-columns:1fr}}
 </style></head>
 <body>
@@ -105,6 +127,7 @@ button.ren:hover{color:var(--accent)!important}
   <div class="htools">
     <select id="periodSel" title="Période"></select>
     <button id="uploadBtn" class="primary">+ Importer un export</button>
+    <button id="mapBtn" title="Modifier le rattachement comptes → postes">Mapping</button>
     <button id="logoutBtn" title="Se déconnecter">Déconnexion</button>
   </div>
 </header>
@@ -172,6 +195,24 @@ button.ren:hover{color:var(--accent)!important}
     <div class="actions">
       <button id="upCancel">Annuler</button>
       <button id="upSubmit" class="primary">Importer</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="mapModal">
+  <div class="modalbox mapbox">
+    <h3>Mapping des comptes → postes</h3>
+    <p class="maphint">Le <b>préfixe le plus long</b> l'emporte : un compte exact (7 chiffres) prime sur une règle de classe (ex. <code>64</code>). Les modifications s'appliquent immédiatement à toutes les périodes.</p>
+    <div class="maptools">
+      <input type="text" id="mapFilter" placeholder="Filtrer (compte ou poste)…">
+      <button id="mapAdd">+ Ligne</button>
+      <button id="mapReset" title="Revenir à la table de correspondance officielle">Réinitialiser</button>
+    </div>
+    <div class="maprows" id="mapRows"></div>
+    <div class="upstatus" id="mapStatus"></div>
+    <div class="actions">
+      <button id="mapCancel">Annuler</button>
+      <button id="mapSave" class="primary">Enregistrer</button>
     </div>
   </div>
 </div>
@@ -332,7 +373,7 @@ function renderDrawer(){
   (d.accounts||[]).forEach(a=>{
     const sel=drillState.acct===a.account?'sel':'';
     const lab=acctName(a.account)?`<span class="alab">${acctName(a.account)}</span>`:`<span class="alab muted">(libellé ?)</span>`;
-    h+=`<tr class="acctrow ${sel}" data-acct="${a.account}"><td class="lbl"><b>${a.account}</b> ${lab} <button class="ren" data-acct="${a.account}" title="Renommer ce compte">✎</button></td><td>${eur(a.sum)}</td></tr>`;
+    h+=`<tr class="acctrow ${sel}" data-acct="${a.account}"><td class="lbl"><b>${a.account}</b> ${lab} <button class="ren" data-acct="${a.account}" title="Renommer ce compte">✎</button> <button class="reassign" data-acct="${a.account}" title="Déplacer ce compte vers un autre poste">⇄</button></td><td>${eur(a.sum)}</td></tr>`;
   });
   h+='</tbody></table>';
   let lines=[];
@@ -350,10 +391,11 @@ function renderDrawer(){
   h+='</tbody></table>';
   body.innerHTML=h;
   body.querySelectorAll('tr.acctrow').forEach(tr=>tr.addEventListener('click',e=>{
-    if(e.target.classList.contains('ren'))return;
+    if(e.target.classList.contains('ren')||e.target.classList.contains('reassign'))return;
     const a=tr.dataset.acct;drillState.acct=(drillState.acct===a?null:a);renderDrawer();
   }));
   body.querySelectorAll('button.ren').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();renameAcct(b.dataset.acct);}));
+  body.querySelectorAll('button.reassign').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();reassignAccount(b.dataset.acct,drillState.poste,b);}));
   const cf=body.querySelector('.clearf');if(cf)cf.addEventListener('click',()=>{drillState.acct=null;renderDrawer();});
 }
 async function renameAcct(a){
@@ -367,6 +409,92 @@ async function renameAcct(a){
   }catch(e){alert("Échec de l'enregistrement du libellé : "+e.message);}
 }
 function closeDrawer(){document.getElementById('drawer').classList.remove('open');document.getElementById('backdrop').classList.remove('open');}
+
+// ---------------------------- mapping ----------------------------
+let POSTES=[], MAPRULES=[];
+async function loadMappingMeta(){
+  try{const d=await api('/api/mapping');POSTES=d.postes||[];MAPRULES=d.rules||[];}
+  catch(e){POSTES=[];MAPRULES=[];}
+}
+function posteOptions(sel){return POSTES.map(p=>`<option value="${p}" ${p===sel?'selected':''}>${p}</option>`).join('');}
+
+// quick reassign from the drill drawer
+function reassignAccount(account,currentPoste,btn){
+  const old=document.getElementById('reassignPop');if(old)old.remove();
+  const pop=document.createElement('div');pop.id='reassignPop';pop.className='reassignpop';
+  pop.innerHTML=`<div class="rp-t">Déplacer <b>${account}</b> vers :</div>
+    <select id="rpSel">${posteOptions(currentPoste)}</select>
+    <div class="rp-act"><button class="rp-x">Annuler</button><button class="rp-ok">Déplacer</button></div>`;
+  document.body.appendChild(pop);
+  const r=btn.getBoundingClientRect();
+  pop.style.top=(r.bottom+window.scrollY+4)+'px';
+  pop.style.left=(Math.min(r.left,window.innerWidth-270)+window.scrollX)+'px';
+  const close=()=>pop.remove();
+  pop.querySelector('.rp-x').onclick=close;
+  pop.querySelector('.rp-ok').onclick=async()=>{
+    const poste=pop.querySelector('#rpSel').value;close();
+    if(poste===currentPoste)return;
+    try{
+      await api('/api/mapping/rule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prefix:account,poste})});
+      const cur=drillState.poste;
+      await loadSnapshot(document.getElementById('periodSel').value);
+      await loadMappingMeta();
+      if(DATA.drill&&DATA.drill[cur])openDrawer(cur);else closeDrawer();
+    }catch(e){alert("Échec du déplacement : "+e.message);}
+  };
+}
+
+// full mapping editor modal
+let mapDraft=[];
+function openMapping(){
+  mapDraft=MAPRULES.map(r=>({prefix:r.prefix,poste:r.poste}));
+  document.getElementById('mapStatus').textContent="";
+  document.getElementById('mapFilter').value="";
+  renderMapRows();
+  document.getElementById('mapModal').classList.add('open');
+}
+function closeMapping(){document.getElementById('mapModal').classList.remove('open');}
+function renderMapRows(){
+  const f=(document.getElementById('mapFilter').value||"").toLowerCase();
+  const host=document.getElementById('mapRows');
+  const rows=mapDraft.map((r,i)=>({r,i}))
+    .filter(({r})=>!f||r.prefix.toLowerCase().includes(f)||(r.poste||"").toLowerCase().includes(f));
+  host.innerHTML=rows.map(({r,i})=>`<div class="maprow" data-i="${i}">
+      <input type="text" class="mp-prefix" value="${r.prefix}" placeholder="compte / préfixe">
+      <select class="mp-poste">${posteOptions(r.poste)}</select>
+      <button class="del" title="Supprimer">×</button>
+    </div>`).join('') || '<div style="padding:14px;color:#94a3b8;font-size:13px">Aucune règle.</div>';
+  host.querySelectorAll('.maprow').forEach(row=>{
+    const i=+row.dataset.i;
+    row.querySelector('.mp-prefix').addEventListener('input',e=>mapDraft[i].prefix=e.target.value.trim());
+    row.querySelector('.mp-poste').addEventListener('change',e=>mapDraft[i].poste=e.target.value);
+    row.querySelector('.del').addEventListener('click',()=>{mapDraft.splice(i,1);renderMapRows();});
+  });
+}
+async function saveMapping(){
+  const st=document.getElementById('mapStatus');
+  const rules=mapDraft.filter(r=>r.prefix&&r.poste);
+  st.style.color="#64748b";st.textContent="Enregistrement…";
+  try{
+    await api('/api/mapping',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({rules})});
+    await loadMappingMeta();
+    await loadSnapshot(document.getElementById('periodSel').value);
+    st.style.color="#16a34a";st.textContent="Mapping enregistré ("+rules.length+" règles).";
+    setTimeout(closeMapping,700);
+  }catch(e){st.style.color="#dc2626";st.textContent="Échec : "+e.message;}
+}
+async function resetMapping(){
+  if(!confirm("Réinitialiser le mapping à la table de correspondance officielle ? Les modifications manuelles seront perdues."))return;
+  try{
+    await api('/api/mapping/reset',{method:'POST'});
+    await loadMappingMeta();
+    mapDraft=MAPRULES.map(r=>({prefix:r.prefix,poste:r.poste}));
+    renderMapRows();
+    await loadSnapshot(document.getElementById('periodSel').value);
+    document.getElementById('mapStatus').style.color="#16a34a";
+    document.getElementById('mapStatus').textContent="Réinitialisé ("+MAPRULES.length+" règles).";
+  }catch(e){document.getElementById('mapStatus').textContent="Échec : "+e.message;}
+}
 
 // ---------------------------- upload ----------------------------
 function openModal(){document.getElementById('upStatus').textContent="";document.getElementById('upModal').classList.add('open');}
@@ -405,8 +533,15 @@ function wireStatic(){
   cmpSel.addEventListener('change',e=>{CMP=e.target.value;localStorage.setItem('kpiCmp',CMP);if(DATA)renderKpis();});
   document.getElementById('periodSel').addEventListener('change',e=>loadSnapshot(e.target.value));
   document.getElementById('logoutBtn').onclick=async()=>{await fetch('/api/logout',{method:'POST'});location.href='/login';};
+  document.getElementById('mapBtn').onclick=openMapping;
+  document.getElementById('mapCancel').onclick=closeMapping;
+  document.getElementById('mapSave').onclick=saveMapping;
+  document.getElementById('mapReset').onclick=resetMapping;
+  document.getElementById('mapAdd').onclick=()=>{mapDraft.unshift({prefix:"",poste:POSTES[0]||""});renderMapRows();};
+  document.getElementById('mapFilter').addEventListener('input',renderMapRows);
 }
 async function boot(forcePeriod){
+  await loadMappingMeta();
   const {periods,latest}=await loadPeriods();
   const dash=document.getElementById('dash'), empty=document.getElementById('empty');
   if(!periods.length){dash.classList.add('hidden');empty.classList.remove('hidden');return;}

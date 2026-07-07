@@ -51,8 +51,15 @@ def load_mapping(path: Optional[str] = None) -> List[Tuple[str, str]]:
 
 
 class Mapper:
-    def __init__(self, path: Optional[str] = None):
-        self.rules = load_mapping(path)
+    def __init__(self, rules=None, path: Optional[str] = None):
+        """``rules`` = explicit ``[(prefix, poste), ...]`` (e.g. from the store);
+        otherwise load from the CSV at ``path``."""
+        if rules is not None:
+            self.rules = sorted(
+                [(str(p), str(poste)) for p, poste in rules], key=lambda kv: -len(kv[0])
+            )
+        else:
+            self.rules = load_mapping(path)
 
     def poste_for(self, account: str) -> Optional[str]:
         """Longest-prefix match. Returns None if no rule matches."""

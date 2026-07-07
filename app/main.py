@@ -19,7 +19,10 @@ from .auth import (
 )
 from .parsing.detail import build_drill, parse_detail
 from .parsing.mapping import PROVISIONAL_BANNER, Mapper
-from .parsing.pnl import get_value, parse_pnl
+from .parsing.pnl import STRUCT, get_value, parse_pnl
+
+# Poste labels a GL account can be assigned to (everything but section headers).
+POSTE_LABELS = [lbl for lbl, _lvl, kind in STRUCT if kind != "header"]
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -46,6 +49,8 @@ def assemble_snapshot(
     cost_bytes: Optional[bytes] = None,
     cogs_bytes: Optional[bytes] = None,
 ) -> dict:
+    """Parse the export and store the RAW GL accounts. The per-poste drill-down is
+    computed at serve-time from the current mapping (so mapping edits apply live)."""
     snap = parse_pnl(pnl_bytes)
 
     accounts: Dict[str, dict] = {}
@@ -54,31 +59,39 @@ def assemble_snapshot(
     if cogs_bytes:
         accounts = _merge_accounts(accounts, parse_detail(cogs_bytes))
 
-    drill: Dict[str, dict] = {}
-    unmapped = []
-    if accounts:
-        mapper = Mapper()
-
-        def monthly_actual_for(poste: str):
-            return get_value(snap["lines"], poste, "monthly", "actual")
-
-        drill, unmapped = build_drill(
-            accounts, mapper, monthly_actual_for, note=PROVISIONAL_BANNER
-        )
-
-    snap["drill"] = drill
-    snap["unmapped_accounts"] = unmapped
+    snap["accounts"] = {
+        a: {"sum": round(v["sum"], 2), "lines": v["lines"]} for a, v in accounts.items()
+    }
     snap["_uploaded_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
     return snap
 
 
-def _with_labels(snapshot: dict) -> dict:
-    """Inject the shared server-side account labels into a snapshot's drill."""
+def _resolve_drill(snapshot: dict):
+    """Build the drill-down from stored raw accounts using the CURRENT mapping.
+    Falls back to a legacy frozen ``drill`` for snapshots saved before this change."""
+    accounts = snapshot.get("accounts")
+    if not accounts:
+        return snapshot.get("drill", {}), snapshot.get("unmapped_accounts", [])
+
+    mapper = Mapper(rules=store.get_mapping_rules())
+
+    def monthly_actual_for(poste: str):
+        return get_value(snapshot["lines"], poste, "monthly", "actual")
+
+    return build_drill(accounts, mapper, monthly_actual_for, note=PROVISIONAL_BANNER)
+
+
+def _prepare_snapshot(snapshot: dict) -> dict:
+    """Resolve the drill from the current mapping and inject shared account labels."""
+    drill, unmapped = _resolve_drill(snapshot)
     labels = store.get_labels()
-    drill = snapshot.get("drill", {})
     for poste in drill.values():
         for acc in poste.get("accounts", []):
             acc["label"] = labels.get(acc["account"], "")
+    snapshot = dict(snapshot)
+    snapshot.pop("accounts", None)  # keep the response lean; lines live inside drill
+    snapshot["drill"] = drill
+    snapshot["unmapped_accounts"] = unmapped
     return snapshot
 
 
@@ -135,7 +148,7 @@ def api_snapshot(period: Optional[str] = None):
     snap = store.get_snapshot(period)
     if snap is None:
         raise HTTPException(status_code=404, detail=f"Période {period} introuvable")
-    return _with_labels(snap)
+    return _prepare_snapshot(snap)
 
 
 @app.post("/api/upload")
@@ -152,12 +165,13 @@ async def api_upload(
     except Exception as e:  # noqa: BLE001 - surface parsing errors to the user
         raise HTTPException(status_code=400, detail=f"Échec du parsing : {e}")
     entry = store.save_snapshot(snap)
+    _drill, unmapped = _resolve_drill(snap)
     return {
         "ok": True,
         "period": entry["period"],
         "label": entry["label"],
-        "unmapped_accounts": len(snap.get("unmapped_accounts", [])),
-        "has_drill": bool(snap.get("drill")),
+        "unmapped_accounts": len(unmapped),
+        "has_drill": bool(snap.get("accounts")),
     }
 
 
@@ -195,4 +209,46 @@ def api_unmapped(period: Optional[str] = None):
     snap = store.get_snapshot(period) if period else None
     if snap is None:
         return {"period": period, "unmapped_accounts": []}
-    return {"period": period, "unmapped_accounts": snap.get("unmapped_accounts", [])}
+    _drill, unmapped = _resolve_drill(snap)
+    return {"period": period, "unmapped_accounts": unmapped}
+
+
+# ---------------------------------------------------------- mapping API ---
+
+def _rules_payload(rules):
+    return [{"prefix": p, "poste": poste} for p, poste in rules]
+
+
+@app.get("/api/mapping")
+def api_get_mapping():
+    """Current mapping rules + the list of postes an account can be assigned to."""
+    rules = sorted(store.get_mapping_rules(), key=lambda r: (r[1], r[0]))
+    return {"rules": _rules_payload(rules), "postes": POSTE_LABELS}
+
+
+@app.put("/api/mapping")
+async def api_put_mapping(request: Request):
+    """Replace the whole mapping. Body: {"rules": [{prefix, poste}, ...]} or a bare list."""
+    body = await request.json()
+    rules = body.get("rules", []) if isinstance(body, dict) else body
+    saved = store.set_mapping_rules(rules)
+    return {"ok": True, "count": len(saved)}
+
+
+@app.post("/api/mapping/rule")
+async def api_upsert_rule(request: Request):
+    """Add/update a single rule. Body: {prefix, poste}. Empty poste deletes it."""
+    body = await request.json()
+    prefix = str(body.get("prefix", "")).strip()
+    poste = str(body.get("poste", "")).strip()
+    if not prefix:
+        raise HTTPException(status_code=400, detail="Préfixe/compte requis")
+    saved = store.upsert_mapping_rule(prefix, poste)
+    return {"ok": True, "count": len(saved)}
+
+
+@app.post("/api/mapping/reset")
+def api_reset_mapping():
+    """Discard in-app edits and re-seed from the CSV default."""
+    saved = store.reset_mapping()
+    return {"ok": True, "count": len(saved)}

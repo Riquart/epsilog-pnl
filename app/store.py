@@ -16,6 +16,7 @@ from typing import Dict, List, Optional
 DATA_DIR = os.environ.get("DATA_DIR", os.path.join(os.path.dirname(os.path.dirname(__file__)), "data"))
 INDEX_FILE = "index.json"
 LABELS_FILE = "account_labels.json"
+MAPPING_FILE = "mapping.json"
 
 _lock = threading.Lock()
 
@@ -118,3 +119,58 @@ def update_label(account: str, label: str) -> Dict[str, str]:
             labels.pop(account, None)
         _write_json(LABELS_FILE, labels)
         return labels
+
+
+# ------------------------------------------------------------------ mapping ---
+
+def get_mapping_rules() -> List[List[str]]:
+    """Return the effective mapping as ``[[prefix, poste], ...]``.
+
+    Seeded once from ``mapping/account_to_poste.csv`` on first use, then editable
+    and persisted in ``DATA_DIR/mapping.json`` (source of truth thereafter).
+    """
+    data = _read_json(MAPPING_FILE, None)
+    if data is None:
+        from .parsing.mapping import load_mapping  # late import to avoid cycle
+
+        data = [[p, poste] for p, poste in load_mapping()]
+        _write_json(MAPPING_FILE, data)
+    return data
+
+
+def set_mapping_rules(rules) -> List[List[str]]:
+    """Replace the mapping. Accepts a list of ``{prefix,poste}`` or ``[prefix,poste]``."""
+    with _lock:
+        clean: List[List[str]] = []
+        seen = set()
+        for r in rules or []:
+            if isinstance(r, dict):
+                prefix = str(r.get("prefix", "")).strip()
+                poste = str(r.get("poste", "")).strip()
+            else:
+                prefix = str(r[0]).strip()
+                poste = str(r[1]).strip()
+            if prefix and poste and prefix not in seen:
+                seen.add(prefix)
+                clean.append([prefix, poste])
+        _write_json(MAPPING_FILE, clean)
+        return clean
+
+
+def upsert_mapping_rule(prefix: str, poste: str) -> List[List[str]]:
+    """Add or update a single ``prefix -> poste`` rule."""
+    prefix = (prefix or "").strip()
+    poste = (poste or "").strip()
+    rules = [r for r in get_mapping_rules() if r[0] != prefix]
+    if poste:  # empty poste = delete the rule
+        rules.append([prefix, poste])
+    return set_mapping_rules(rules)
+
+
+def reset_mapping() -> List[List[str]]:
+    """Discard in-app edits and re-seed from the CSV default."""
+    with _lock:
+        p = _path(MAPPING_FILE)
+        if os.path.exists(p):
+            os.remove(p)
+    return get_mapping_rules()

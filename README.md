@@ -95,6 +95,10 @@ tests/test_parsing.py
 | DELETE | `/api/snapshot?period=YYYY-MM` | supprime une période |
 | GET/PUT | `/api/labels` | libellés métier des comptes (persistés côté serveur) |
 | PUT | `/api/labels/{account}` | renomme un compte |
+| GET | `/api/mapping` | règles de rattachement + liste des postes assignables |
+| PUT | `/api/mapping` | remplace toutes les règles |
+| POST | `/api/mapping/rule` | ajoute/modifie une règle `{prefix, poste}` |
+| POST | `/api/mapping/reset` | réinitialise à la table CSV par défaut |
 | GET | `/api/unmapped` | diagnostic : comptes non rattachés à un poste |
 | GET | `/health` | healthcheck |
 
@@ -117,9 +121,14 @@ regroupement peut différer de la catégorie comptable d'un compte. Exemple : le
 du P&L. Le tiroir de drill-down affiche donc, pour chaque poste, le montant P&L, le montant rattaché
 et l'**écart** résiduel. Ces écarts sont normaux et n'affectent pas le total.
 
-Le fichier `mapping/account_to_poste.csv` reste **éditable** : pour affiner une affectation, il
-suffit d'ajouter/modifier une ligne (le préfixe le plus long l'emporte). L'endpoint `/api/unmapped`
-liste les comptes qui ne matcheraient aucune règle (utile pour les nouveaux comptes).
+**Édition du mapping dans l'application** : le bouton **« Mapping »** (en-tête) ouvre un éditeur
+(ajout/modif/suppression de règles, filtre, réinitialisation). On peut aussi **déplacer un compte**
+directement depuis le tiroir de détail (bouton ⇄ à côté du compte). Les modifications sont
+persistées côté serveur (`DATA_DIR/mapping.json`, sur le volume Railway) et **s'appliquent
+immédiatement à toutes les périodes, sans ré-import** : les snapshots stockent les écritures brutes
+et le rattachement est recalculé à l'affichage. Le CSV `mapping/account_to_poste.csv` ne sert qu'à
+l'amorçage initial ; « Réinitialiser » y revient. L'endpoint `/api/unmapped` liste les comptes sans
+règle (utile pour les nouveaux comptes).
 
 Le fichier COGS a une structure moins régulière (lignes orphelines, comptes de classe 5) :
 parsing tolérant, lignes non rattachées signalées dans `/api/unmapped`.

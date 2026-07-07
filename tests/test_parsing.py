@@ -7,7 +7,7 @@ import os
 
 import pytest
 
-from app.main import assemble_snapshot
+from app.main import _prepare_snapshot, assemble_snapshot
 from app.parsing.detail import parse_detail, total_detail
 from app.parsing.pnl import get_value, parse_pnl
 
@@ -99,9 +99,11 @@ def test_assemble_snapshot_roundtrip():
         cost_b = f.read()
     snap = assemble_snapshot(pnl_b, cost_b)
     assert snap["period"] == "2026-05"
-    assert snap["drill"], "drill-down should be populated when cost file is provided"
+    assert snap["accounts"], "raw GL accounts should be stored in the snapshot"
+    served = _prepare_snapshot(snap)
+    assert served["drill"], "drill-down should resolve from the current mapping"
     # Every cost account maps via the official correspondence table (0 unmapped).
-    assert snap["unmapped_accounts"] == []
+    assert served["unmapped_accounts"] == []
 
 
 def test_opex_mapping_reconciles_to_total_costs():
@@ -112,8 +114,8 @@ def test_opex_mapping_reconciles_to_total_costs():
         pnl_b = f.read()
     with open(COST_FILE, "rb") as f:
         cost_b = f.read()
-    snap = assemble_snapshot(pnl_b, cost_b)
+    served = _prepare_snapshot(assemble_snapshot(pnl_b, cost_b))
     total_mapped = sum(
-        acc["sum"] for poste in snap["drill"].values() for acc in poste["accounts"]
+        acc["sum"] for poste in served["drill"].values() for acc in poste["accounts"]
     )
     assert abs(total_mapped - 915_247.51) <= 0.01
