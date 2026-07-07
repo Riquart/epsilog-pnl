@@ -100,6 +100,20 @@ def test_assemble_snapshot_roundtrip():
     snap = assemble_snapshot(pnl_b, cost_b)
     assert snap["period"] == "2026-05"
     assert snap["drill"], "drill-down should be populated when cost file is provided"
-    # The drill reconciliation for Contractors should be exact.
-    contr = snap["drill"].get("Contractors")
-    assert contr and abs(contr["meta"]["mapped"] - contr["meta"]["pnl"]) <= 1.0
+    # Every cost account maps via the official correspondence table (0 unmapped).
+    assert snap["unmapped_accounts"] == []
+
+
+def test_opex_mapping_reconciles_to_total_costs():
+    """The official mapping must tie the sum of all mapped OPEX accounts to the
+    P&L monthly Total Costs (915 247,51 €). Per-poste gaps are expected
+    (management reclassification), but the grand total must reconcile."""
+    with open(PNL_FILE, "rb") as f:
+        pnl_b = f.read()
+    with open(COST_FILE, "rb") as f:
+        cost_b = f.read()
+    snap = assemble_snapshot(pnl_b, cost_b)
+    total_mapped = sum(
+        acc["sum"] for poste in snap["drill"].values() for acc in poste["accounts"]
+    )
+    assert abs(total_mapped - 915_247.51) <= 0.01

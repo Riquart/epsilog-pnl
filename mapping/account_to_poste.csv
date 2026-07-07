@@ -1,52 +1,124 @@
 account_prefix,poste
-# ------------------------------------------------------------------------------
-# PROVISIONAL account -> P&L poste mapping (PCG class heuristic).
-# Longest matching prefix wins (e.g. 6155 beats 61).
-# WARNING: the P&L management postes are a RECLASSIFICATION of the SAP report
-# hierarchy (212-000), NOT a raw PCG grouping. For an exact tie-out, replace this
-# file with the account -> report-node export from SAP. See prompt sections 7 & 9.
-# ------------------------------------------------------------------------------
-# Personnel
+# ==============================================================================
+# Correspondance compte -> poste P&L, generee depuis "Correspondance comptes.xlsx"
+# (table officielle EPSILOG). Matching par prefixe LE PLUS LONG : un compte exact
+# a 7 chiffres l'emporte sur une regle de classe courte.
+#
+# Regle ajoutee : 64 -> Personnel expenses. Le bloc de paie francais (comptes
+# 641xxxxx : salaires bruts, charges...) N'EST PAS dans la table officielle mais
+# releve du Personnel (classe 64 PCG). Cette regle rattrape aussi tout compte 64
+# de paie non liste. Les comptes 64 office/juridique de la table (6400xxx, 645xxxx)
+# gardent leur affectation car leur prefixe exact (7 car.) est plus long.
+# ==============================================================================
 64,Personnel expenses
-63,Personnel expenses
-645,Personnel expenses
-# Outsourcing / subcontracting
-611,Outsourcing
+# --- Total Revenues ---
+4000000,Total Revenues
+4050500,Total Revenues
+4100000,Total Revenues
+4101500,Total Revenues
+4150000,Total Revenues
+4200000,Total Revenues
+4201500,Total Revenues
+4350000,Total Revenues
+# --- Internal Revenues (Group Companies) ---
+4451000,Internal Revenues (Group Companies)
+# --- Other income ---
+4500000,Other income
+4501500,Other income
+4501510,Other income
+4501520,Other income
+4503500,Other income
+# --- Total COGS ---
+5050500,Total COGS
+5100000,Total COGS
+5101500,Total COGS
+5201500,Total COGS
+5451000,Total COGS
+# --- Personnel expenses ---
+6000000,Personnel expenses
+6001000,Personnel expenses
+6001500,Personnel expenses
+6003000,Personnel expenses
+6004000,Personnel expenses
+6004100,Personnel expenses
+6004200,Personnel expenses
+6004500,Personnel expenses
+6005000,Personnel expenses
+6006000,Personnel expenses
+6006100,Personnel expenses
+6006500,Personnel expenses
+6007000,Personnel expenses
+6007500,Personnel expenses
+6001500,Personnel expenses
+6004500,Personnel expenses
+6004501,Personnel expenses
+6004502,Personnel expenses
+# --- Outsourcing ---
 6051000,Outsourcing
-6053,Outsourcing
-6054,Outsourcing
-6004,Outsourcing
-# Contractors (external freelance) — pins to the exact account
-6054700,Contractors
-# Occupancy (rent, utilities)
-613,Occupancy
-614,Occupancy
-615,Occupancy
-610,Occupancy
-# ICT (telecom, software, hosting)
-6155,ICT
-626,ICT
-6201,ICT
-# Marketing
-623,Marketing
-6207,Marketing
-620,Marketing
-# Travel
-625,Travel
-# Office supplies
-606,Office supplies
-6005,Office supplies
-6006,Office supplies
-6007,Office supplies
-600,Office supplies
-# Law and consultancy fees
-622,Law and consultancy fees
-# Insurances
-616,Insurances
-# Financial result
-66,Financial result
-# Other expenses (fallback within class 6)
-6003,Other expenses
-635,Other expenses
-630,Other expenses
-658,Other expenses
+6053500,Outsourcing
+6054000,Outsourcing
+6054100,Outsourcing
+6054200,Outsourcing
+6054600,Outsourcing
+6054700,Outsourcing
+# --- Contractors ---
+6100000,Contractors
+6101000,Contractors
+6101500,Contractors
+# --- Occupancy ---
+6150000,Occupancy
+6150100,Occupancy
+6150500,Occupancy
+6150600,Occupancy
+6151000,Occupancy
+6152000,Occupancy
+6152500,Occupancy
+6153000,Occupancy
+6154000,Occupancy
+6155200,Occupancy
+# --- ICT ---
+6200000,ICT
+6200500,ICT
+6201000,ICT
+6201500,ICT
+6203500,ICT
+6206000,ICT
+6207000,ICT
+# --- Marketing ---
+6250000,Marketing
+6250500,Marketing
+6251000,Marketing
+6251500,Marketing
+6254000,Marketing
+# --- Company Cars ---
+6300000,Company Cars
+6301000,Company Cars
+6301500,Company Cars
+6302000,Company Cars
+6302500,Company Cars
+6303000,Company Cars
+# --- Travel ---
+6350000,Travel
+6350500,Travel
+6351000,Travel
+6351500,Travel
+6352000,Travel
+6353000,Travel
+# --- Office supplies ---
+6400000,Office supplies
+6400500,Office supplies
+# --- Law and consultancy fees ---
+6450500,Law and consultancy fees
+6451000,Law and consultancy fees
+6451500,Law and consultancy fees
+6452000,Law and consultancy fees
+# --- Other expenses ---
+6600000,Other expenses
+6600500,Other expenses
+6601500,Other expenses
+6603000,Other expenses
+6603600,Other expenses
+6604500,Other expenses
+6605000,Other expenses
+6606500,Other expenses
+6607000,Other expenses

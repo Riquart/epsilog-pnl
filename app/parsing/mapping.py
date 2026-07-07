@@ -18,10 +18,12 @@ _DEFAULT_CSV = os.path.join(
 )
 
 PROVISIONAL_BANNER = (
-    "⚠️ Rattachement <b>provisoire</b> (par classe comptable PCG). Les postes de "
-    "gestion sont une <b>reclassification</b> des comptes : le rattachement exact "
-    "vient de la hiérarchie du rapport SAP 212-000 (à fournir en CSV — voir le "
-    "prompt §7). Les écarts ci-dessous sont donc normaux à ce stade."
+    "Rattachement basé sur la <b>table de correspondance officielle</b> "
+    "(compte → poste). Le total des charges se réconcilie au centime, mais les "
+    "postes de gestion du P&L sont une <b>reclassification</b> : le regroupement "
+    "peut différer de la catégorie comptable d'un compte (ex. un compte « Outsourcing IC » "
+    "peut être présenté en Contractors dans le P&L). L'écart affiché par poste reflète "
+    "cette reclassification."
 )
 
 

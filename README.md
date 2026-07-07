@@ -105,14 +105,21 @@ tests/test_parsing.py
 Le détail des coûts se rapproche **au centime** du P&L (Σ écritures *Total cost* = **915 247,51 €**
 = Total Costs mensuel). Le drill-down par **compte** est donc fiable.
 
-**MAIS** les postes de gestion (Personnel, Outsourcing, Contractors, ICT…) sont une
-**reclassification** de la hiérarchie SAP, **pas** la classe comptable PCG brute. Exemple :
-*Personnel expenses* = 514 822 €/mois alors que les comptes de classe 64 ne pèsent que ≈ 305 k€.
+Le mapping `mapping/account_to_poste.csv` est généré depuis la **table de correspondance
+officielle EPSILOG** (compte → poste), au niveau du **compte exact** (7 chiffres). Une seule
+règle de classe est ajoutée : `64 → Personnel expenses`, car le bloc de paie français
+(comptes `641xxxxx` : salaires bruts, charges) n'est pas listé dans la table mais relève du
+Personnel. Résultat : **le total OPEX se réconcilie au centime** et **0 compte non mappé**.
 
-⇒ Le mapping `mapping/account_to_poste.csv` fourni est **provisoire** (heuristique par classe PCG),
-avec un bandeau d'avertissement et l'écart affiché dans le tiroir de drill-down.
-**Pour un rattachement exact**, demander à SAP l'export *compte → nœud du rapport 212-000* et
-remplacer le CSV. L'endpoint `/api/unmapped` liste les comptes à compléter au fil de l'eau.
+⚠️ **Écarts par poste** : les postes de gestion du P&L sont une **reclassification** — le
+regroupement peut différer de la catégorie comptable d'un compte. Exemple : le compte `6054700`
+(166 618 €, catégorie « Outsourcing IC » dans la table) correspond exactement au poste *Contractors*
+du P&L. Le tiroir de drill-down affiche donc, pour chaque poste, le montant P&L, le montant rattaché
+et l'**écart** résiduel. Ces écarts sont normaux et n'affectent pas le total.
+
+Le fichier `mapping/account_to_poste.csv` reste **éditable** : pour affiner une affectation, il
+suffit d'ajouter/modifier une ligne (le préfixe le plus long l'emporte). L'endpoint `/api/unmapped`
+liste les comptes qui ne matcheraient aucune règle (utile pour les nouveaux comptes).
 
 Le fichier COGS a une structure moins régulière (lignes orphelines, comptes de classe 5) :
 parsing tolérant, lignes non rattachées signalées dans `/api/unmapped`.
