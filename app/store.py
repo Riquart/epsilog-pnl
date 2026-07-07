@@ -17,6 +17,7 @@ DATA_DIR = os.environ.get("DATA_DIR", os.path.join(os.path.dirname(os.path.dirna
 INDEX_FILE = "index.json"
 LABELS_FILE = "account_labels.json"
 MAPPING_FILE = "mapping.json"
+NOTES_FILE = "notes.json"
 
 _lock = threading.Lock()
 
@@ -174,3 +175,32 @@ def reset_mapping() -> List[List[str]]:
         if os.path.exists(p):
             os.remove(p)
     return get_mapping_rules()
+
+
+# -------------------------------------------------------------------- notes ---
+
+def get_notes(period: Optional[str] = None):
+    """All notes ``{period: {label: text}}`` or, if ``period`` is given, that
+    period's ``{label: text}``."""
+    data = _read_json(NOTES_FILE, {})
+    if period is None:
+        return data
+    return data.get(period, {})
+
+
+def set_note(period: str, label: str, text: str) -> Dict[str, str]:
+    """Set (or clear, if ``text`` is empty) a note on one P&L line for a period."""
+    with _lock:
+        data = _read_json(NOTES_FILE, {})
+        per = data.get(period, {})
+        text = (text or "").strip()
+        if text:
+            per[label] = text
+        else:
+            per.pop(label, None)
+        if per:
+            data[period] = per
+        else:
+            data.pop(period, None)
+        _write_json(NOTES_FILE, data)
+        return per

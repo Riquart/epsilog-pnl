@@ -43,6 +43,13 @@ tr.drill:hover{background:#eff6ff}
 .hidden{display:none}
 .ph{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .ph h3{margin:0}
+.ph-actions{display:flex;gap:8px;align-items:center;flex:none}
+.noteflag{cursor:pointer;color:#d97706;font-size:12px;margin-right:2px}
+.noteflag:hover{color:#b45309}
+#noteText{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;font-size:13px;font-family:inherit;resize:vertical}
+#noteModal .modalbox button.danger{margin-right:auto;color:var(--neg);border-color:#fecaca}
+#noteModal .modalbox button.danger:hover{background:#fef2f2}
+#noteLine{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:9px;font-size:13px;background:#fff}
 .colpick{position:relative;flex:none}
 .colbtn{padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--ink)}
 .colbtn:hover{background:var(--soft)}
@@ -163,9 +170,12 @@ button.reassign:hover{color:var(--accent)!important}
     <div class="panel full">
       <div class="ph">
         <h3>Compte de résultat détaillé <small class="cap">— cliquez une ligne <span class="badge">›</span> pour le détail</small></h3>
-        <div class="colpick">
-          <button id="colBtn" class="colbtn">Colonnes ▾</button>
-          <div id="colMenu" class="colmenu hidden"></div>
+        <div class="ph-actions">
+          <button id="noteBtn" class="colbtn">✎ Note</button>
+          <div class="colpick">
+            <button id="colBtn" class="colbtn">Colonnes ▾</button>
+            <div id="colMenu" class="colmenu hidden"></div>
+          </div>
         </div>
       </div>
       <table id="pnl"><thead></thead><tbody></tbody></table>
@@ -220,9 +230,30 @@ button.reassign:hover{color:var(--accent)!important}
   </div>
 </div>
 
+<div class="modal" id="noteModal">
+  <div class="modalbox">
+    <h3 id="noteTitle">Ajouter une note</h3>
+    <div class="fld">
+      <label>Ligne du compte de résultat</label>
+      <select id="noteLine"></select>
+    </div>
+    <div class="fld">
+      <label>Commentaire</label>
+      <textarea id="noteText" rows="4" placeholder="Votre commentaire…"></textarea>
+    </div>
+    <div class="upstatus" id="noteStatus"></div>
+    <div class="actions">
+      <button id="noteDelete" class="danger">Supprimer</button>
+      <button id="noteCancel">Annuler</button>
+      <button id="noteSave" class="primary">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
 <script>
-let DATA=null, BLK="monthly", acctLabels={};
+let DATA=null, BLK="monthly", acctLabels={}, NOTES={};
 let CMP = (localStorage.getItem('kpiCmp')==='d_fc') ? 'd_fc' : 'd_bud';
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const COLS=[
   {k:'actual',label:'Réel'},{k:'budget',label:'Budget'},{k:'d_bud',label:'Δ Bud',delta:true},
   {k:'fc',label:'Forecast'},{k:'d_fc',label:'Δ FC',delta:true},{k:'py',label:'N-1'}
@@ -254,7 +285,12 @@ async function loadSnapshot(period){
   DATA=await api('/api/snapshot'+(period?('?period='+encodeURIComponent(period)):''));
   acctLabels={};
   Object.values(DATA.drill||{}).forEach(d=>(d.accounts||[]).forEach(a=>{if(a.label)acctLabels[a.account]=a.label;}));
+  await loadNotes(DATA.period||period);
   renderAll();
+}
+async function loadNotes(period){
+  try{const d=await api('/api/notes'+(period?('?period='+encodeURIComponent(period)):''));NOTES=d.notes||{};}
+  catch(e){NOTES={};}
 }
 function renderAll(){
   document.getElementById('meta').textContent =
@@ -346,11 +382,13 @@ function renderTable(){
     const v=ln.values?ln.values[BLK]:{};
     const cls="l"+ln.level;
     const drillable = (DATA.drill&&DATA.drill[ln.label]) ? "drill" : "";
+    const flag = NOTES[ln.label] ? `<span class="noteflag" data-note="${esc(ln.label)}" title="Voir la note : ${esc(NOTES[ln.label])}">⚠</span>` : '';
     const cells=cols.map(c=>c.delta?`<td>${dcell(v[c.k],ln.polarity)}</td>`:`<td>${eur0(v[c.k])}</td>`).join('');
     tb.insertAdjacentHTML('beforeend',
-      `<tr class="${cls} ${drillable}" data-label="${ln.label}"><td class="lbl">${ln.label}</td>${cells}</tr>`);
+      `<tr class="${cls} ${drillable}" data-label="${esc(ln.label)}"><td class="lbl">${flag}${ln.label}</td>${cells}</tr>`);
   });
   tb.querySelectorAll('tr.drill').forEach(tr=>tr.addEventListener('click',()=>openDrawer(tr.dataset.label)));
+  tb.querySelectorAll('.noteflag').forEach(f=>f.addEventListener('click',e=>{e.stopPropagation();openNote(f.dataset.note);}));
 }
 
 // ---------------------------- drill-down drawer ----------------------------
@@ -519,6 +557,42 @@ async function doUpload(){
   }catch(e){st.style.color="#dc2626";st.textContent="Échec : "+e.message;}
 }
 
+// ---------------------------- notes ----------------------------
+function openNote(label){
+  const sel=document.getElementById('noteLine');
+  const lines=DATA.lines.filter(l=>l.kind!=='header');
+  sel.innerHTML=lines.map(l=>`<option value="${esc(l.label)}">${l.label}</option>`).join('');
+  if(label) sel.value=label;
+  const cur=sel.value;
+  document.getElementById('noteText').value=NOTES[cur]||"";
+  document.getElementById('noteStatus').textContent="";
+  refreshNoteState();
+  document.getElementById('noteModal').classList.add('open');
+  document.getElementById('noteText').focus();
+}
+function refreshNoteState(){
+  const cur=document.getElementById('noteLine').value;
+  const exists=!!NOTES[cur];
+  document.getElementById('noteTitle').textContent=(exists?"Note — ":"Ajouter une note — ")+cur;
+  document.getElementById('noteDelete').style.display=exists?"inline-block":"none";
+}
+function closeNote(){document.getElementById('noteModal').classList.remove('open');}
+async function saveNote(){
+  const label=document.getElementById('noteLine').value;
+  const text=document.getElementById('noteText').value;
+  const period=document.getElementById('periodSel').value;
+  const st=document.getElementById('noteStatus');
+  st.style.color="#64748b";st.textContent="Enregistrement…";
+  try{
+    const r=await api('/api/notes',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({period,label,text})});
+    NOTES=r.notes||{};renderTable();closeNote();
+  }catch(e){st.style.color="#dc2626";st.textContent="Échec : "+e.message;}
+}
+async function deleteNote(){
+  document.getElementById('noteText').value="";
+  await saveNote();
+}
+
 // ---------------------------- boot ----------------------------
 function wireStatic(){
   initColPicker();
@@ -542,6 +616,14 @@ function wireStatic(){
   document.getElementById('mapReset').onclick=resetMapping;
   document.getElementById('mapAdd').onclick=()=>{mapDraft.unshift({prefix:"",poste:POSTES[0]||""});renderMapRows();};
   document.getElementById('mapFilter').addEventListener('input',renderMapRows);
+  document.getElementById('noteBtn').onclick=()=>openNote(null);
+  document.getElementById('noteCancel').onclick=closeNote;
+  document.getElementById('noteSave').onclick=saveNote;
+  document.getElementById('noteDelete').onclick=deleteNote;
+  document.getElementById('noteLine').addEventListener('change',()=>{
+    document.getElementById('noteText').value=NOTES[document.getElementById('noteLine').value]||"";
+    refreshNoteState();
+  });
 }
 async function boot(forcePeriod){
   await loadMappingMeta();

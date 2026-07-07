@@ -99,6 +99,7 @@ tests/test_parsing.py
 | PUT | `/api/mapping` | remplace toutes les règles |
 | POST | `/api/mapping/rule` | ajoute/modifie une règle `{prefix, poste}` |
 | POST | `/api/mapping/reset` | réinitialise à la table CSV par défaut |
+| GET/PUT | `/api/notes` | notes/commentaires par ligne de P&L (par période) |
 | GET | `/api/unmapped` | diagnostic : comptes non rattachés à un poste |
 | GET | `/health` | healthcheck |
 

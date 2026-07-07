@@ -252,3 +252,24 @@ def api_reset_mapping():
     """Discard in-app edits and re-seed from the CSV default."""
     saved = store.reset_mapping()
     return {"ok": True, "count": len(saved)}
+
+
+# ------------------------------------------------------------- notes API ---
+
+@app.get("/api/notes")
+def api_get_notes(period: Optional[str] = None):
+    period = period or store.latest_period()
+    return {"period": period, "notes": store.get_notes(period) if period else {}}
+
+
+@app.put("/api/notes")
+async def api_put_note(request: Request):
+    """Set/clear a note on a P&L line. Body: {period, label, text}."""
+    body = await request.json()
+    period = str(body.get("period", "")).strip() or store.latest_period()
+    label = str(body.get("label", "")).strip()
+    text = body.get("text", "")
+    if not period or not label:
+        raise HTTPException(status_code=400, detail="Période et ligne requises")
+    notes = store.set_note(period, label, text)
+    return {"ok": True, "period": period, "notes": notes}
