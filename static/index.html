@@ -73,9 +73,13 @@ box-shadow:-12px 0 40px rgba(15,23,42,.18);transition:right .25s ease;z-index:50
 .drawer .dh h3{margin:0;font-size:15px}
 .drawer .dh .note{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.4}
 .drawer .db{overflow-y:auto;overflow-x:hidden;padding:8px 14px 30px}
-.drawer table{width:100%}
-.drawer th,.drawer td{vertical-align:top}
-.drawer td.wrap{white-space:normal;overflow-wrap:break-word}
+.drawer .db table{width:100%;table-layout:fixed;border-collapse:collapse}
+.drawer .db th,.drawer .db td{padding:4px 8px;vertical-align:middle;line-height:1.3;border-bottom:1px solid #f1f5f9}
+.drawer .db td.ell,.drawer .db th.ell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acctbl td:nth-child(2),.acctbl th:nth-child(2){width:104px}
+.enttbl td:nth-child(1),.enttbl th:nth-child(1){width:74px}
+.enttbl td:nth-child(2),.enttbl th:nth-child(2){width:92px}
+.enttbl td:nth-child(4),.enttbl th:nth-child(4){width:82px}
 .x{position:absolute;top:14px;right:16px;cursor:pointer;color:var(--muted);font-size:20px;border:none;background:none}
 .backdrop{position:fixed;inset:0;background:rgba(15,23,42,.35);opacity:0;pointer-events:none;transition:.25s;z-index:40}
 .backdrop.open{opacity:1;pointer-events:auto}
@@ -414,11 +418,11 @@ function renderDrawer(){
   if(d.meta){const ec=(d.meta.mapped||0)-(d.meta.pnl||0);
     h+=`<div class="recon">Poste P&L (mois) : <b>${eur(d.meta.pnl)}</b><br>Comptes rattachés (provisoire) : <b>${eur(d.meta.mapped)}</b> &nbsp;·&nbsp; écart : <b class="${Math.abs(ec)<1?'pos':'neg'}">${eur(ec)}</b></div>`;}
   if(!(d.accounts||[]).length){body.innerHTML=h+'<div class="nodrill">Aucun détail disponible pour ce poste (importez le fichier de détail correspondant).</div>';return;}
-  h+='<table><thead><tr><th class="lbl">Compte</th><th>Montant</th></tr></thead><tbody>';
+  h+='<table class="acctbl"><thead><tr><th class="lbl">Compte</th><th>Montant</th></tr></thead><tbody>';
   (d.accounts||[]).forEach(a=>{
     const sel=drillState.acct===a.account?'sel':'';
     const lab=acctName(a.account)?`<span class="alab">${acctName(a.account)}</span>`:`<span class="alab muted">(libellé ?)</span>`;
-    h+=`<tr class="acctrow ${sel}" data-acct="${a.account}"><td class="lbl wrap"><b>${a.account}</b> ${lab} <button class="ren" data-acct="${a.account}" title="Renommer ce compte">✎</button> <button class="reassign" data-acct="${a.account}" title="Déplacer ce compte vers un autre poste">⇄</button></td><td>${eur(a.sum)}</td></tr>`;
+    h+=`<tr class="acctrow ${sel}" data-acct="${a.account}"><td class="lbl ell"><b>${a.account}</b> <button class="ren" data-acct="${a.account}" title="Renommer ce compte">✎</button> <button class="reassign" data-acct="${a.account}" title="Déplacer ce compte vers un autre poste">⇄</button> ${lab}</td><td>${eur(a.sum)}</td></tr>`;
   });
   h+='</tbody></table>';
   let lines=[];
@@ -430,9 +434,10 @@ function renderDrawer(){
     ? `Écritures — <b>${drillState.acct}</b> ${acctName(drillState.acct)} <button class="clearf">✕ tout afficher</button>`
     : `Écritures — <small class="cap">cliquez un compte ci-dessus pour filtrer</small>`;
   h+=`<h3 style="font-size:13px;margin:18px 0 8px">${head}</h3>`;
-  h+='<table><thead><tr><th class="lbl">Date</th><th class="lbl">Compte</th><th class="lbl">Libellé écriture</th><th>Montant</th></tr></thead><tbody>';
+  h+='<table class="enttbl"><thead><tr><th class="lbl">Date</th><th class="lbl">Compte</th><th class="lbl">Libellé écriture</th><th>Montant</th></tr></thead><tbody>';
   lines.slice(0,120).forEach(l=>{const nm=acctName(l.account)?` · ${acctName(l.account)}`:"";
-    h+=`<tr><td class="lbl">${l.date}</td><td class="lbl">${l.account}${nm}</td><td class="lbl wrap">${l.text||""}</td><td>${eur(l.amount)}</td></tr>`;});
+    const txt=String(l.text||"").replace(/\s+/g,' ').trim();
+    h+=`<tr><td class="lbl">${l.date}</td><td class="lbl ell" title="${esc(l.account+nm)}">${l.account}${nm}</td><td class="lbl ell" title="${esc(txt)}">${txt}</td><td>${eur(l.amount)}</td></tr>`;});
   h+='</tbody></table>';
   body.innerHTML=h;
   body.querySelectorAll('tr.acctrow').forEach(tr=>tr.addEventListener('click',e=>{
