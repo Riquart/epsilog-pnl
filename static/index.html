@@ -16,7 +16,9 @@ header .sub{color:#94a3b8;font-size:12.5px;margin-top:4px}
 .htools button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
 .htools button:hover{filter:brightness(1.1)}
 .wrap{max-width:1280px;margin:0 auto;padding:22px 28px 60px}
-.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:22px}
+.kpis{display:grid;grid-template-columns:repeat(7,1fr);gap:12px;margin-bottom:22px}
+#fteBody table{width:100%;border-collapse:collapse;font-size:13px}
+#fteBody .neu{color:var(--muted)}
 .kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;box-shadow:0 1px 2px rgba(15,23,42,.04)}
 .kpi .t{font-size:12px;color:var(--muted);font-weight:600}
 .kpi .v{font-size:21px;font-weight:700;margin-top:6px}
@@ -133,7 +135,8 @@ button.ren:hover{color:var(--accent)!important}
 button.reassign{border:none;background:none;cursor:pointer;color:#cbd5e1;font-size:12px;padding:0 4px}
 tr.acctrow:hover button.reassign{color:#94a3b8}
 button.reassign:hover{color:var(--accent)!important}
-@media(max-width:1000px){.kpis{grid-template-columns:repeat(3,1fr)}.grid{grid-template-columns:1fr}}
+@media(max-width:1100px){.kpis{grid-template-columns:repeat(4,1fr)}.grid{grid-template-columns:1fr}}
+@media(max-width:640px){.kpis{grid-template-columns:repeat(2,1fr)}}
 </style></head>
 <body>
 <header>
@@ -143,23 +146,24 @@ button.reassign:hover{color:var(--accent)!important}
   </div>
   <div class="htools">
     <select id="periodSel" title="Période"></select>
-    <button id="uploadBtn" class="primary">Importer</button>
-    <button id="mapBtn" title="Modifier le rattachement comptes → postes">Mapping</button>
-    <button id="logoutBtn" title="Se déconnecter">Déconnexion</button>
+    <button id="uploadBtn" class="primary" data-i18n="import">Importer</button>
+    <button id="mapBtn" title="Compte → poste" data-i18n="mapping">Mapping</button>
+    <button id="langBtn" title="Langue / Language">EN</button>
+    <button id="logoutBtn" title="Se déconnecter" data-i18n="logout">Déconnexion</button>
   </div>
 </header>
 <div class="wrap">
   <div id="empty" class="hidden">
-    <h2>Aucune donnée importée</h2>
-    <p>Cliquez sur « + Importer un export » pour déposer le P&amp;L mensuel (.xlsx).</p>
+    <h2 data-i18n="empty_title">Aucune donnée importée</h2>
+    <p data-i18n="empty_sub">Cliquez sur « Importer » pour déposer le P&amp;L mensuel (.xlsx).</p>
   </div>
   <div id="dash">
     <div class="toolbar">
       <div class="tabs">
-        <div class="tab on" data-blk="monthly">Mois</div>
-        <div class="tab" data-blk="cumul">Cumulé (YTD)</div>
+        <div class="tab on" data-blk="monthly" data-i18n="tab_month">Mois</div>
+        <div class="tab" data-blk="cumul" data-i18n="tab_cumul">Cumulé (YTD)</div>
       </div>
-      <label class="cmp">Comparer à
+      <label class="cmp"><span data-i18n="compare">Comparer à</span>
         <select id="cmpSel">
           <option value="d_bud">Budget</option>
           <option value="d_fc">Forecast</option>
@@ -168,19 +172,19 @@ button.reassign:hover{color:var(--accent)!important}
     </div>
     <div class="kpis" id="kpis"></div>
     <div class="grid">
-      <div class="panel"><h3>Répartition des charges opérationnelles</h3><canvas id="opexChart" height="220"></canvas></div>
-      <div class="panel"><h3>Réel vs Budget vs Forecast</h3><canvas id="bvaChart" height="220"></canvas></div>
+      <div class="panel"><h3 data-i18n="opex_title">Répartition des charges opérationnelles</h3><canvas id="opexChart" height="220"></canvas></div>
+      <div class="panel"><h3 data-i18n="bva_title">Réel vs Budget vs Forecast</h3><canvas id="bvaChart" height="220"></canvas></div>
     </div>
     <div class="grid">
-      <div class="panel full"><h3>Du chiffre d'affaires à l'EBITDA</h3><div class="bridgewrap"><canvas id="bridgeChart"></canvas></div></div>
+      <div class="panel full"><h3 data-i18n="fte_title">Effectifs (FTE) par service</h3><div id="fteBody"></div></div>
     </div>
     <div class="panel full">
       <div class="ph">
-        <h3>Compte de résultat détaillé <small class="cap">— cliquez une ligne <span class="badge">›</span> pour le détail</small></h3>
+        <h3><span data-i18n="pnl_title">Compte de résultat détaillé</span> <small class="cap" data-i18n="pnl_hint">— cliquez une ligne pour le détail</small></h3>
         <div class="ph-actions">
-          <button id="noteBtn" class="colbtn">✎ Note</button>
+          <button id="noteBtn" class="colbtn" data-i18n="note">✎ Note</button>
           <div class="colpick">
-            <button id="colBtn" class="colbtn">Colonnes ▾</button>
+            <button id="colBtn" class="colbtn" data-i18n="columns">Colonnes ▾</button>
             <div id="colMenu" class="colmenu hidden"></div>
           </div>
         </div>
@@ -261,9 +265,41 @@ button.reassign:hover{color:var(--accent)!important}
 let DATA=null, BLK="monthly", acctLabels={}, NOTES={};
 let CMP = (localStorage.getItem('kpiCmp')==='d_fc') ? 'd_fc' : 'd_bud';
 const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+// ---------------------------- i18n ----------------------------
+let LANG = (localStorage.getItem('lang')==='en') ? 'en' : 'fr';
+const T={
+  fr:{tab_month:'Mois',tab_cumul:'Cumulé (YTD)',compare:'Comparer à',import:'Importer',mapping:'Mapping',
+    logout:'Déconnexion',note:'✎ Note',columns:'Colonnes ▾',pnl_title:'Compte de résultat détaillé',
+    pnl_hint:'— cliquez une ligne pour le détail',opex_title:'Répartition des charges opérationnelles',
+    bva_title:'Réel vs Budget vs Forecast',fte_title:'Effectifs (FTE) par service',
+    col_actual:'Réel',col_budget:'Budget',col_dbud:'Δ Bud',col_fc:'Forecast',col_dfc:'Δ FC',col_py:'N-1',
+    ytd:'YTD',vsBud:'vs Bud',vsFC:'vs FC',empty_title:'Aucune donnée importée',
+    empty_sub:'Cliquez sur « Importer » pour déposer le P&L mensuel (.xlsx).',svc:'Service',
+    kpi_revext:"Chiffre d'affaires (externe)",kpi_opex:'Charges (OPEX)',kpi_ebitda:'EBITDA',
+    kpi_ebitdapct:'EBITDA %',kpi_ebitdacash:'EBITDA cash',kpi_ebit:'EBIT',kpi_fte:'Effectifs (FTE)',poste:'Poste'},
+  en:{tab_month:'Month',tab_cumul:'Cumulative (YTD)',compare:'Compare to',import:'Import',mapping:'Mapping',
+    logout:'Logout',note:'✎ Note',columns:'Columns ▾',pnl_title:'Detailed income statement',
+    pnl_hint:'— click a row for details',opex_title:'Operating expenses breakdown',
+    bva_title:'Actual vs Budget vs Forecast',fte_title:'Headcount (FTE) by department',
+    col_actual:'Actual',col_budget:'Budget',col_dbud:'Δ Bud',col_fc:'Forecast',col_dfc:'Δ FC',col_py:'PY',
+    ytd:'YTD',vsBud:'vs Bud',vsFC:'vs FC',empty_title:'No data imported',
+    empty_sub:'Click “Import” to upload the monthly P&L (.xlsx).',svc:'Department',
+    kpi_revext:'Revenues (external)',kpi_opex:'OPEX',kpi_ebitda:'EBITDA',
+    kpi_ebitdapct:'EBITDA %',kpi_ebitdacash:'EBITDA cash',kpi_ebit:'EBIT',kpi_fte:'Headcount (FTE)',poste:'Line item'}
+};
+const SECT={'Produits':'Revenues','Coût des ventes (COGS)':'Cost of goods sold (COGS)',
+  'Charges opérationnelles (OPEX)':'Operating expenses (OPEX)','Résultat':'Result'};
+const t = k => (T[LANG][k]!==undefined?T[LANG][k]:k);
+function applyLang(){
+  document.querySelectorAll('[data-i18n]').forEach(el=>{el.textContent=t(el.dataset.i18n);});
+  document.getElementById('langBtn').textContent = LANG==='fr'?'EN':'FR';
+  document.documentElement.lang=LANG;
+}
+
 const COLS=[
-  {k:'actual',label:'Réel'},{k:'budget',label:'Budget'},{k:'d_bud',label:'Δ Bud',delta:true},
-  {k:'fc',label:'Forecast'},{k:'d_fc',label:'Δ FC',delta:true},{k:'py',label:'N-1'}
+  {k:'actual',tk:'col_actual'},{k:'budget',tk:'col_budget'},{k:'d_bud',tk:'col_dbud',delta:true},
+  {k:'fc',tk:'col_fc'},{k:'d_fc',tk:'col_dfc',delta:true},{k:'py',tk:'col_py'}
 ];
 let visibleCols;
 try{visibleCols=new Set(JSON.parse(localStorage.getItem('pnlCols')||'[]'));}catch(e){visibleCols=null;}
@@ -303,31 +339,65 @@ function renderAll(){
   document.getElementById('meta').textContent =
     [DATA.metadata.entity, DATA.metadata.period, DATA.metadata.scenario, DATA.metadata.run_by]
       .map(s=>(s||'').replace(/^[^:]+:\s*/,'')).filter(Boolean).join("  •  ");
-  renderKpis();renderCharts();renderTable();
+  updateForecastOption();
+  renderKpis();renderCharts();renderTable();renderFte();
 }
 
 // ---------------------------- KPIs ----------------------------
-const KPI = [
-  ["Total Revenues","Chiffre d'affaires"],["Gross Profit Total","Marge brute"],
-  ["Total Costs","Charges (OPEX)"],["EBITDA after Central IC","EBITDA"],
-  ["EBIT","EBIT"],["Net result","Résultat net"],
+// value of a P&L line for a given metric at a given block
+function lv(label,metric,block){const r=find(label);return r&&r.values?r.values[block][metric]:null;}
+function extRev(m,b){const tot=lv('Total Revenues',m,b);if(tot==null)return null;return tot-(lv('Internal Revenues (Group Companies)',m,b)||0);}
+function ebitdaPct(m,b){const e=lv('EBITDA after Central IC',m,b),r=lv('Total Revenues',m,b);return (e==null||!r)?null:e/r*100;}
+function fteVal(m,b){return (DATA.fte&&DATA.fte.eop&&DATA.fte.eop[b])?DATA.fte.eop[b][m]:null;}
+const KPICARDS=[
+  {t:'kpi_revext',fmt:'eur',pol:'income',get:extRev},
+  {t:'kpi_opex',fmt:'eur',pol:'cost',get:(m,b)=>lv('Total Costs',m,b)},
+  {t:'kpi_ebitda',fmt:'eur',pol:'income',get:(m,b)=>lv('EBITDA after Central IC',m,b)},
+  {t:'kpi_ebitdapct',fmt:'pct',pol:'income',get:ebitdaPct},
+  {t:'kpi_ebitdacash',fmt:'eur',pol:'income',get:(m,b)=>lv('Cash-EBITDA after Central IC',m,b)},
+  {t:'kpi_ebit',fmt:'eur',pol:'income',get:(m,b)=>lv('EBIT',m,b)},
+  {t:'kpi_fte',fmt:'num',pol:'neutral',get:fteVal},
 ];
+function fmtVal(v,fmt){
+  if(v==null||isNaN(v))return "—";
+  if(fmt==='eur')return eur(v);
+  if(fmt==='pct')return new Intl.NumberFormat(LANG==='fr'?'fr-FR':'en-US',{maximumFractionDigits:1}).format(v)+" %";
+  return new Intl.NumberFormat(LANG==='fr'?'fr-FR':'en-US',{maximumFractionDigits:1}).format(v);
+}
 function renderKpis(){
   const host=document.getElementById('kpis');host.innerHTML="";
-  KPI.forEach(([lab,fr])=>{
-    const a=val(lab,"actual"), dB=val(lab,CMP);
-    const cum=(find(lab)?.values?.cumul?.actual);
-    const pol=(find(lab)||{}).polarity||"income";
-    const sfx=CMP==='d_fc'?"vs FC":"vs Bud";
+  const cmpMetric=CMP==='d_fc'?'fc':'budget';
+  const sfx=CMP==='d_fc'?t('vsFC'):t('vsBud');
+  KPICARDS.forEach(c=>{
+    const a=c.get('actual',BLK), cmp=c.get(cmpMetric,BLK), ytd=c.get('actual','cumul');
     let dcls="",dtxt="";
-    if(dB!=null){const good=(pol==='cost')?(dB<0):(dB>0);
-      dcls=Math.abs(dB)<1?"neu":(good?"pos":"neg");
-      dtxt=(dB>=0?"▲ ":"▼ ")+eur(Math.abs(dB))+" "+sfx;}
+    if(a!=null&&cmp!=null){
+      const dv=a-cmp, eps=(c.fmt==='eur')?1:0.05;
+      if(c.pol==='neutral')dcls="neu";
+      else{const good=(c.pol==='cost')?(dv<0):(dv>0);dcls=Math.abs(dv)<eps?"neu":(good?"pos":"neg");}
+      const dabs=(c.fmt==='eur')?eur(Math.abs(dv)):(c.fmt==='pct')?fmtVal(Math.abs(dv),'num')+" pt":fmtVal(Math.abs(dv),'num');
+      dtxt=(dv>=0?"▲ ":"▼ ")+dabs+" "+sfx;
+    }
     host.insertAdjacentHTML('beforeend',
-      `<div class="kpi"><div class="t">${fr}</div><div class="v">${eur(a)}</div>
+      `<div class="kpi"><div class="t">${t(c.t)}</div><div class="v">${fmtVal(a,c.fmt)}</div>
        <div class="d ${dcls}">${dtxt||"&nbsp;"}</div>
-       <div class="y">YTD ${eur(cum)}</div></div>`);
+       <div class="y">${t('ytd')} ${fmtVal(ytd,c.fmt)}</div></div>`);
   });
+}
+function renderFte(){
+  const host=document.getElementById('fteBody');if(!host)return;
+  const svcs=(DATA.fte&&DATA.fte.services)||[];
+  const cmpMetric=CMP==='d_fc'?'fc':'budget';
+  const cmpLabel=CMP==='d_fc'?t('col_fc'):t('col_budget');
+  const fn=v=>fmtVal(v,'num');
+  const dcell=d=>d==null?"—":`<span class="${Math.abs(d)<0.05?'neu':''}">${(d>=0?'+':'')+fn(d)}</span>`;
+  let h=`<table><thead><tr><th class="lbl">${t('svc')}</th><th>${t('col_actual')}</th><th>${cmpLabel}</th><th>Δ</th></tr></thead><tbody>`;
+  svcs.forEach(s=>{const a=s.values[BLK].actual,c=s.values[BLK][cmpMetric];const d=(a!=null&&c!=null)?a-c:null;
+    h+=`<tr><td class="lbl">${esc(s.label)}</td><td>${fn(a)}</td><td>${fn(c)}</td><td>${dcell(d)}</td></tr>`;});
+  const ta=fteVal('actual',BLK),tc=fteVal(cmpMetric,BLK);const td=(ta!=null&&tc!=null)?ta-tc:null;
+  h+=`<tr class="l0"><td class="lbl">${t('kpi_fte')}</td><td>${fn(ta)}</td><td>${fn(tc)}</td><td>${dcell(td)}</td></tr>`;
+  h+='</tbody></table>';
+  host.innerHTML=svcs.length?h:'<div style="color:#94a3b8;font-size:13px;padding:8px">—</div>';
 }
 
 // ---------------------------- charts ----------------------------
@@ -335,56 +405,68 @@ let charts={};
 function destroy(){Object.values(charts).forEach(c=>c&&c.destroy());charts={};}
 function renderCharts(){
   destroy();
-  const opex=[["Personnel expenses","Personnel"],["Outsourcing","Outsourcing"],["Contractors","Sous-traitants"],
-    ["Occupancy","Locaux"],["ICT","Informatique"],["Marketing","Marketing"],["Other expenses","Autres"],
-    ["Travel","Déplacements"],["Office supplies","Fournitures"],["Company Cars","Véhicules"],["Law and consultancy fees","Conseil/juridique"]];
-  const od=opex.map(([l])=>val(l,"actual")||0), ol=opex.map(([,f])=>f);
-  charts.opex=new Chart(opexChart,{type:'bar',data:{labels:ol,datasets:[{data:od,backgroundColor:'#2563eb',borderRadius:5}]},
-    options:{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>eur(c.raw)}}},
+  const cmpMetric=CMP==='d_fc'?'fc':'budget';
+  const cmpLabel=CMP==='d_fc'?t('col_fc'):t('col_budget');
+  const opex=[["Personnel expenses","Personnel","Personnel"],["Outsourcing","Outsourcing","Outsourcing"],
+    ["Contractors","Sous-traitants","Contractors"],["Occupancy","Locaux","Occupancy"],
+    ["ICT","Informatique","ICT"],["Marketing","Marketing","Marketing"],["Other expenses","Autres","Other"],
+    ["Travel","Déplacements","Travel"],["Office supplies","Fournitures","Office supplies"],
+    ["Company Cars","Véhicules","Company cars"],["Law and consultancy fees","Conseil/juridique","Legal & consultancy"]];
+  const ol=opex.map(o=>LANG==='fr'?o[1]:o[2]);
+  const od=opex.map(o=>val(o[0],"actual")||0);
+  const ocmp=opex.map(o=>val(o[0],cmpMetric)||0);
+  charts.opex=new Chart(opexChart,{type:'bar',data:{labels:ol,datasets:[
+    {label:t('col_actual'),data:od,backgroundColor:'#2563eb',borderRadius:5},
+    {label:cmpLabel,data:ocmp,backgroundColor:'#f59e0b',borderRadius:5}]},
+    options:{indexAxis:'y',plugins:{legend:{display:true,position:'bottom'},tooltip:{callbacks:{label:c=>c.dataset.label+": "+eur(c.raw)}}},
       scales:{x:{ticks:{callback:v=>eur0(v)}}}}});
-  const bva=[["Total Revenues","CA"],["Gross Profit Total","Marge brute"],["EBITDA after Central IC","EBITDA"],["EBIT","EBIT"]];
+  const bva=[["Total Revenues","Revenues"],["EBITDA after Central IC","EBITDA"],["Cash-EBITDA after Central IC","EBITDA cash"],["EBIT","EBIT"]];
   charts.bva=new Chart(bvaChart,{type:'bar',data:{labels:bva.map(b=>b[1]),datasets:[
-    {label:'Réel',data:bva.map(b=>val(b[0],"actual")),backgroundColor:'#2563eb',borderRadius:4},
-    {label:'Budget',data:bva.map(b=>val(b[0],"budget")),backgroundColor:'#cbd5e1',borderRadius:4},
-    {label:'Forecast',data:bva.map(b=>val(b[0],"fc")),backgroundColor:'#a78bfa',borderRadius:4}]},
+    {label:t('col_actual'),data:bva.map(b=>val(b[0],"actual")),backgroundColor:'#2563eb',borderRadius:4},
+    {label:t('col_budget'),data:bva.map(b=>val(b[0],"budget")),backgroundColor:'#cbd5e1',borderRadius:4},
+    {label:t('col_fc'),data:bva.map(b=>val(b[0],"fc")),backgroundColor:'#a78bfa',borderRadius:4}]},
     options:{plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>c.dataset.label+": "+eur(c.raw)}}},
-      scales:{y:{ticks:{callback:v=>eur0(v)}}}}});
-  const rev0=val("Total Revenues","actual")||0, cogs=val("Total COGS","actual")||0,
-        opx=val("Total Costs","actual")||0, cap=val("Capitalized in-house services","actual")||0,
-        oi=val("Other income","actual")||0, eb=val("EBITDA after Central IC","actual")||0;
-  let run=0; const steps=[["CA",rev0],["- COGS",-cogs],["- OPEX",-opx],["+ Prod. immo.",cap],["+ Autres prod.",oi]];
-  const floats=[], cols=[];
-  steps.forEach(([n,v])=>{floats.push([run,run+v]);cols.push(v>=0?'#16a34a':'#dc2626');run+=v;});
-  floats.push([0,eb]);cols.push('#2563eb');
-  charts.bridge=new Chart(bridgeChart,{type:'bar',
-    data:{labels:[...steps.map(s=>s[0]),"EBITDA"],datasets:[{data:floats,backgroundColor:cols,borderRadius:4}]},
-    options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>eur(c.raw[1]-c.raw[0])}}},
       scales:{y:{ticks:{callback:v=>eur0(v)}}}}});
 }
 
 // ---------------------------- table ----------------------------
-function initColPicker(){
+function buildColMenu(){
   const menu=document.getElementById('colMenu');
-  menu.innerHTML=COLS.map(c=>`<label><input type="checkbox" data-k="${c.k}" ${visibleCols.has(c.k)?'checked':''}> ${c.label}</label>`).join('');
+  menu.innerHTML=COLS.map(c=>`<label><input type="checkbox" data-k="${c.k}" ${visibleCols.has(c.k)?'checked':''}> ${t(c.tk)}</label>`).join('');
   menu.querySelectorAll('input').forEach(inp=>inp.addEventListener('change',()=>{
     inp.checked?visibleCols.add(inp.dataset.k):visibleCols.delete(inp.dataset.k);
     saveCols();renderTable();
   }));
+}
+function initColPicker(){
+  const menu=document.getElementById('colMenu');
+  buildColMenu();
   document.getElementById('colBtn').addEventListener('click',e=>{e.stopPropagation();menu.classList.toggle('hidden');});
   menu.addEventListener('click',e=>e.stopPropagation());
   document.addEventListener('click',()=>menu.classList.add('hidden'));
 }
+function forecastName(){
+  const s=(DATA&&DATA.metadata&&DATA.metadata.forecast_scenario)||'';
+  const m=s.match(/\(([^)]+)\)/); if(m)return m[1].trim();
+  const m2=s.match(/(20\d{2}FCT[_0-9A-Za-z]*)/); return m2?m2[1]:'';
+}
+function updateForecastOption(){
+  const ob=document.querySelector('#cmpSel option[value="d_bud"]');
+  const of=document.querySelector('#cmpSel option[value="d_fc"]');
+  if(ob)ob.textContent=t('col_budget');
+  if(of){const fn=forecastName();of.textContent=t('col_fc')+(fn?(' — '+fn):'');}
+}
 function renderTable(){
   const cols=COLS.filter(c=>visibleCols.has(c.k));
   document.querySelector('#pnl thead').innerHTML=
-    '<tr><th class="lbl">Poste</th>'+cols.map(c=>`<th>${c.label}</th>`).join('')+'</tr>';
+    `<tr><th class="lbl">${t('poste')}</th>`+cols.map(c=>`<th>${t(c.tk)}</th>`).join('')+'</tr>';
   const tb=document.querySelector('#pnl tbody');tb.innerHTML="";
   const dcell=(x,pol)=>{ if(x==null)return "—"; if(Math.abs(x)<1)return `<span class="neu">${eur0(x)}</span>`;
     const good=(pol==='cost')?(x<0):(x>0); return `<span class="${good?'pos':'neg'}">${eur0(x)}</span>`; };
   DATA.lines.forEach((ln)=>{
     if(ln.kind==="header"){
-      tb.insertAdjacentHTML('beforeend',`<tr class="hd"><td class="lbl" colspan="${cols.length+1}">${ln.label}</td></tr>`);return;
+      const htxt=(LANG==='en'&&SECT[ln.label])?SECT[ln.label]:ln.label;
+      tb.insertAdjacentHTML('beforeend',`<tr class="hd"><td class="lbl" colspan="${cols.length+1}">${htxt}</td></tr>`);return;
     }
     const v=ln.values?ln.values[BLK]:{};
     const cls="l"+ln.level;
@@ -609,6 +691,12 @@ async function deleteNote(){
 // ---------------------------- boot ----------------------------
 function wireStatic(){
   initColPicker();
+  applyLang();
+  document.getElementById('langBtn').onclick=()=>{
+    LANG=(LANG==='fr')?'en':'fr';localStorage.setItem('lang',LANG);
+    applyLang();buildColMenu();
+    if(DATA)renderAll();else updateForecastOption();
+  };
   document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
     document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
     t.classList.add('on');BLK=t.dataset.blk;if(DATA)renderAll();

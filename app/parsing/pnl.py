@@ -62,6 +62,7 @@ STRUCT = [
     ("Capitalized in-house services", 1, "line"),
     ("Other income", 1, "line"),
     ("EBITDA after Central IC", 0, "kpi"),
+    ("Cash-EBITDA after Central IC", 0, "kpi"),
     ("Depreciation", 1, "line"),
     ("Amortization", 1, "line"),
     ("EBIT", 0, "kpi"),
@@ -138,6 +139,7 @@ def parse_pnl(src: ExcelSource) -> dict:
         "report": meta(1, 6),
         "scenario": meta(2, 6),
         "period": meta(3, 6),
+        "forecast_scenario": meta(4, 6),  # cell G5, e.g. "…Forecast Snapshot… (FC 3+9)"
         "entity": meta(5, 6),
         "run_by": meta(6, 6),
         "currency": "EUR",
@@ -186,6 +188,31 @@ def parse_pnl(src: ExcelSource) -> dict:
         r = label_row.get(lbl, (None, False))[0]
         if r is not None:
             fte[key] = vals(r)
+
+    # FTE breakdown by department: labels sit in column 3 as "thereof <service>",
+    # right below the "FTE [EoP]" marker (also in column 3). Anchor on it to avoid
+    # matching unrelated "thereof" blocks (e.g. the revenue breakdown).
+    def _c3(r):
+        v = raw.iat[r, 3] if raw.shape[1] > 3 else None
+        return v.strip() if isinstance(v, str) else ""
+
+    anchor = next(
+        (r for r in range(raw.shape[0]) if _c3(r).lower().startswith("fte [eop]")),
+        None,
+    )
+    services = []
+    if anchor is not None:
+        for r in range(anchor + 1, raw.shape[0]):
+            c3 = _c3(r)
+            if "thereof" in c3.lower():
+                services.append({
+                    "label": c3[len("thereof"):].strip(" :") if c3.lower().startswith("thereof") else c3,
+                    "values": vals(r),
+                })
+            else:
+                break
+    if services:
+        fte["services"] = services
 
     period_key, _label = _derive_period(metadata)
     return {"period": period_key, "metadata": metadata, "lines": lines, "fte": fte}
