@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 # App code
 COPY . .
 
-# Railway provides $PORT at runtime; default to 8000 locally.
-ENV PORT=8000
-EXPOSE 8000
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Railway routes to 8080 by default and injects $PORT; bind to it (fallback 8080).
+ENV PORT=8080
+EXPOSE 8080
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
