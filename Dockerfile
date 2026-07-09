@@ -10,7 +10,8 @@ RUN pip install --no-cache-dir --upgrade pip \
 # App code
 COPY . .
 
-# Railway routes to 8080 by default and injects $PORT; bind to it (fallback 8080).
+# Railway routes to 8080 by default and injects $PORT; run.py reads it in Python
+# (no shell $PORT expansion needed).
 ENV PORT=8080
 EXPOSE 8080
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+CMD ["python", "run.py"]
