@@ -708,7 +708,7 @@ function wireStatic(){
   document.getElementById('upSubmit').onclick=doUpload;
   const cmpSel=document.getElementById('cmpSel');
   cmpSel.value=CMP;
-  cmpSel.addEventListener('change',e=>{CMP=e.target.value;localStorage.setItem('kpiCmp',CMP);if(DATA)renderKpis();});
+  cmpSel.addEventListener('change',e=>{CMP=e.target.value;localStorage.setItem('kpiCmp',CMP);if(DATA){renderKpis();renderCharts();renderFte();}});
   document.getElementById('periodSel').addEventListener('change',e=>loadSnapshot(e.target.value));
   document.getElementById('logoutBtn').onclick=async()=>{await fetch('/api/logout',{method:'POST'});location.href='/login';};
   document.getElementById('mapBtn').onclick=openMapping;
