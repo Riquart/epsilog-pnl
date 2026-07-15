@@ -1,4 +1,4 @@
-"""Pydantic schemas for the EPSILOG P&L dashboard.
+"""Pydantic schemas for CGM P&L Analyser.
 
 A *Snapshot* is the parsed, structured representation of one monthly export.
 It is what gets persisted as JSON in ``DATA_DIR`` and served to the frontend.

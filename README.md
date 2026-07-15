@@ -1,8 +1,9 @@
-# EPSILOG — Tableau de bord P&L
+# CGM P&L Analyser
 
-Application web qui transforme l'export mensuel du P&L d'**EPSILOG SAS** (rapport de gestion
-du groupe CGM, `212-000 P&L PC Multi-Hierarchy`) en un tableau de bord : KPIs, graphiques, et un
-compte de résultat détaillé avec **drill-down** par poste → comptes → écritures.
+Application web qui transforme l'export mensuel du P&L (rapport de gestion du groupe CGM,
+`212-000 P&L PC Multi-Hierarchy`) en un tableau de bord : KPIs, graphiques, et un compte de
+résultat détaillé avec **drill-down** par poste → comptes → écritures. L'entité (ex. EPSILOG SAS)
+est lue depuis le fichier importé ; la gestion multi-entités est prévue.
 
 - **Réutilisable chaque mois** : on dépose le nouvel export `.xlsx` → tout se recalcule.
 - **Backend** : Python 3.11, FastAPI, uvicorn, pandas, openpyxl.

@@ -73,7 +73,7 @@ def _bootstrap_admin():
 
 _bootstrap_admin()
 
-app = FastAPI(title="EPSILOG P&L Dashboard")
+app = FastAPI(title="CGM P&L Analyser")
 app.add_middleware(AuthMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -278,7 +278,7 @@ def api_2fa_status(email: str = Depends(require_user)):
 def api_2fa_setup(email: str = Depends(require_user)):
     secret = pyotp.random_base32()
     store.upsert_user(email, {"totp_secret": secret, "totp_enabled": False})
-    uri = pyotp.TOTP(secret).provisioning_uri(name=email, issuer_name="EPSILOG P&L")
+    uri = pyotp.TOTP(secret).provisioning_uri(name=email, issuer_name="CGM P&L Analyser")
     return {"secret": secret, "otpauth": uri, "qr_datauri": _qr_datauri(uri)}
 
 
