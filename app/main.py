@@ -46,11 +46,20 @@ if os.environ.get("RESET_2FA") in ("1", "true", "True"):
     if store.get_user(email):
         store.upsert_user(email, {"totp_secret": None, "totp_enabled": False})
 
-# Bootstrap the first admin from APP_PASSWORD so access is never interrupted.
+# Bootstrap an admin from APP_PASSWORD so access is never lost.
+# - No users yet  -> create the admin (ADMIN_EMAIL or "admin").
+# - ADMIN_EMAIL explicitly set but that account is missing -> create it (recovery,
+#   e.g. ADMIN_EMAIL added after the first boot). Never overwrites an existing user.
 def _bootstrap_admin():
-    if not APP_PASSWORD or store.get_users():
+    if not APP_PASSWORD:
         return
-    email = os.environ.get("ADMIN_EMAIL", "admin").strip().lower()
+    users = store.get_users()
+    explicit = os.environ.get("ADMIN_EMAIL", "").strip().lower()
+    email = explicit or "admin"
+    if email in users:
+        return
+    if users and not explicit:
+        return  # users already configured and no explicit admin requested
     store.upsert_user(email, {
         "pw_hash": hash_password(APP_PASSWORD),
         "role": "admin",
@@ -59,7 +68,7 @@ def _bootstrap_admin():
         "disabled": False,
         "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
     })
-    store.audit(email, "bootstrap_admin", "compte admin initial créé depuis APP_PASSWORD")
+    store.audit(email, "bootstrap_admin", "compte admin créé depuis APP_PASSWORD")
 
 
 _bootstrap_admin()
