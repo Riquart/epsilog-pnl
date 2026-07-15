@@ -18,6 +18,7 @@ INDEX_FILE = "index.json"
 LABELS_FILE = "account_labels.json"
 MAPPING_FILE = "mapping.json"
 NOTES_FILE = "notes.json"
+AUTH_FILE = "auth.json"
 
 _lock = threading.Lock()
 
@@ -204,3 +205,16 @@ def set_note(period: str, label: str, text: str) -> Dict[str, str]:
             data.pop(period, None)
         _write_json(NOTES_FILE, data)
         return per
+
+
+# --------------------------------------------------------- 2FA / auth ---
+
+def get_auth() -> dict:
+    """TOTP config: {"totp_secret": str|None, "enabled": bool}."""
+    return _read_json(AUTH_FILE, {"totp_secret": None, "enabled": False})
+
+
+def save_auth(data: dict) -> dict:
+    with _lock:
+        _write_json(AUTH_FILE, data)
+        return data

@@ -21,7 +21,7 @@ button:hover{filter:brightness(1.05)}
 .err{color:#dc2626;font-size:12.5px;margin-top:12px;min-height:16px}
 </style></head>
 <body>
-<form class="card" id="f">
+<form class="card" id="fPw">
   <h1>EPSILOG SAS</h1>
   <p>Tableau de bord P&amp;L — accès protégé</p>
   <label for="pw">Mot de passe</label>
@@ -29,15 +29,40 @@ button:hover{filter:brightness(1.05)}
   <button type="submit">Se connecter</button>
   <div class="err" id="err"></div>
 </form>
+<form class="card" id="fCode" style="display:none">
+  <h1>Vérification</h1>
+  <p>Saisissez le code à 6 chiffres de votre application d'authentification.</p>
+  <label for="code">Code</label>
+  <input type="text" id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456">
+  <button type="submit">Valider</button>
+  <div class="err" id="err2"></div>
+</form>
 <script>
-document.getElementById('f').addEventListener('submit', async (e)=>{
+document.getElementById('fPw').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const err=document.getElementById('err'); err.textContent="";
   const body=new FormData(); body.append('password', document.getElementById('pw').value);
   try{
     const r=await fetch('/api/login',{method:'POST',body});
+    const j=await r.json().catch(()=>({}));
+    if(r.ok){
+      if(j.step==='2fa'){
+        document.getElementById('fPw').style.display='none';
+        document.getElementById('fCode').style.display='block';
+        document.getElementById('code').focus();
+      } else { location.href='/'; }
+    } else { err.textContent=j.detail||"Mot de passe incorrect"; }
+  }catch(_){ err.textContent="Erreur réseau"; }
+});
+document.getElementById('fCode').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const err=document.getElementById('err2'); err.textContent="";
+  const body=new FormData(); body.append('code', document.getElementById('code').value);
+  try{
+    const r=await fetch('/api/2fa/verify',{method:'POST',body});
+    const j=await r.json().catch(()=>({}));
     if(r.ok){ location.href='/'; }
-    else{ const j=await r.json().catch(()=>({})); err.textContent=j.detail||"Mot de passe incorrect"; }
+    else{ err.textContent=j.detail||"Code incorrect"; }
   }catch(_){ err.textContent="Erreur réseau"; }
 });
 </script>

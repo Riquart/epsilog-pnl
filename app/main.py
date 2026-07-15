@@ -1,10 +1,12 @@
 """FastAPI app: API routes + serves the single-page dashboard."""
 from __future__ import annotations
 
+import io
 import os
 import time
 from typing import Dict, Optional
 
+import pyotp
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -13,9 +15,15 @@ from . import store
 from .auth import (
     AuthMiddleware,
     COOKIE_NAME,
-    SESSION_TTL,
+    PRE_COOKIE_NAME,
+    SecurityHeadersMiddleware,
     check_password,
-    make_token,
+    clear_fails,
+    client_ip,
+    has_pre_auth,
+    is_locked,
+    record_fail,
+    set_session_cookie,
 )
 from .parsing.detail import build_drill, parse_detail
 from .parsing.mapping import PROVISIONAL_BANNER, Mapper
@@ -27,9 +35,27 @@ POSTE_LABELS = [lbl for lbl, _lvl, kind in STRUCT if kind != "header"]
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 
+# Recovery escape hatch: set RESET_2FA=1 to wipe 2FA config on startup (use if you
+# lose access to your authenticator, then remove the variable).
+if os.environ.get("RESET_2FA") in ("1", "true", "True"):
+    store.save_auth({"totp_secret": None, "enabled": False})
+
 app = FastAPI(title="EPSILOG P&L Dashboard")
 app.add_middleware(AuthMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+def _qr_svg(data: str) -> str:
+    import qrcode
+    import qrcode.image.svg
+
+    img = qrcode.make(data, image_factory=qrcode.image.svg.SvgImage, box_size=8, border=2)
+    buf = io.BytesIO()
+    img.save(buf)
+    svg = buf.getvalue().decode()
+    i = svg.find("<svg")  # drop any <?xml …?> prolog for safe inline insertion
+    return svg[i:] if i >= 0 else svg
 
 
 # ----------------------------------------------------- snapshot assembly ---
@@ -115,14 +141,40 @@ def index():
 # ------------------------------------------------------------- auth API ---
 
 @app.post("/api/login")
-async def api_login(password: str = Form("")):
+async def api_login(request: Request, password: str = Form("")):
+    ip = client_ip(request)
+    if is_locked(ip):
+        raise HTTPException(status_code=429, detail="Trop de tentatives. Réessayez dans quelques minutes.")
     if not check_password(password):
+        record_fail(ip)
         raise HTTPException(status_code=401, detail="Mot de passe incorrect")
+    auth = store.get_auth()
+    if auth.get("enabled") and auth.get("totp_secret"):
+        resp = JSONResponse({"ok": True, "step": "2fa"})
+        set_session_cookie(resp, "pre")  # password verified, awaiting code
+        return resp
+    clear_fails(ip)
+    resp = JSONResponse({"ok": True, "step": "done"})
+    set_session_cookie(resp, "session")
+    return resp
+
+
+@app.post("/api/2fa/verify")
+async def api_2fa_verify(request: Request, code: str = Form("")):
+    ip = client_ip(request)
+    if is_locked(ip):
+        raise HTTPException(status_code=429, detail="Trop de tentatives. Réessayez dans quelques minutes.")
+    if not has_pre_auth(request):
+        raise HTTPException(status_code=401, detail="Session expirée, reconnectez-vous.")
+    auth = store.get_auth()
+    secret = auth.get("totp_secret")
+    if not secret or not pyotp.TOTP(secret).verify(code.strip(), valid_window=1):
+        record_fail(ip)
+        raise HTTPException(status_code=401, detail="Code incorrect")
+    clear_fails(ip)
     resp = JSONResponse({"ok": True})
-    resp.set_cookie(
-        COOKIE_NAME, make_token(), max_age=SESSION_TTL,
-        httponly=True, samesite="lax", secure=False,
-    )
+    set_session_cookie(resp, "session")
+    resp.delete_cookie(PRE_COOKIE_NAME)
     return resp
 
 
@@ -130,7 +182,43 @@ async def api_login(password: str = Form("")):
 async def api_logout():
     resp = JSONResponse({"ok": True})
     resp.delete_cookie(COOKIE_NAME)
+    resp.delete_cookie(PRE_COOKIE_NAME)
     return resp
+
+
+# 2FA enrollment (requires an authenticated session — behind AuthMiddleware).
+
+@app.get("/api/2fa/status")
+def api_2fa_status():
+    auth = store.get_auth()
+    return {"enabled": bool(auth.get("enabled")), "configured": bool(auth.get("totp_secret"))}
+
+
+@app.post("/api/2fa/setup")
+def api_2fa_setup():
+    """Generate a fresh (not-yet-enabled) secret and return its QR + otpauth URI."""
+    secret = pyotp.random_base32()
+    store.save_auth({"totp_secret": secret, "enabled": False})
+    uri = pyotp.TOTP(secret).provisioning_uri(name="EPSILOG SAS", issuer_name="EPSILOG P&L")
+    return {"secret": secret, "otpauth": uri, "qr_svg": _qr_svg(uri)}
+
+
+@app.post("/api/2fa/activate")
+async def api_2fa_activate(code: str = Form("")):
+    auth = store.get_auth()
+    secret = auth.get("totp_secret")
+    if not secret:
+        raise HTTPException(status_code=400, detail="Lancez d'abord la configuration.")
+    if not pyotp.TOTP(secret).verify(code.strip(), valid_window=1):
+        raise HTTPException(status_code=401, detail="Code incorrect — vérifiez l'heure de votre téléphone.")
+    store.save_auth({"totp_secret": secret, "enabled": True})
+    return {"ok": True, "enabled": True}
+
+
+@app.post("/api/2fa/disable")
+def api_2fa_disable():
+    store.save_auth({"totp_secret": None, "enabled": False})
+    return {"ok": True, "enabled": False}
 
 
 # ------------------------------------------------------------- data API ---

@@ -48,6 +48,13 @@ tr.drill:hover{background:#eff6ff}
 .ph-actions{display:flex;gap:8px;align-items:center;flex:none}
 .noteflag{cursor:pointer;color:#d97706;font-size:12px;margin-right:4px}
 .noteflag:hover{color:#b45309}
+#secBody{font-size:13px;line-height:1.5;color:var(--ink)}
+#secBody svg{width:190px;height:190px;display:block;margin:12px auto;border:1px solid var(--line);border-radius:8px;padding:6px;background:#fff}
+#secBody .secret{font-family:ui-monospace,Menlo,monospace;background:#f1f5f9;padding:6px 10px;border-radius:6px;font-size:13px;word-break:break-all;text-align:center;margin:8px 0}
+#secBody input{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin:8px 0}
+#secBody .ok{color:var(--pos);font-weight:700}
+#secBody button.act{width:100%;padding:10px;border:none;border-radius:9px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;margin-top:6px}
+#secBody button.danger{width:100%;padding:10px;border:1px solid #fecaca;border-radius:9px;background:#fff;color:var(--neg);font-weight:600;cursor:pointer;margin-top:10px}
 .noteadd{opacity:0;border:none;background:none;cursor:pointer;color:#cbd5e1;font-size:11px;padding:0 4px;margin-left:4px;transition:opacity .12s}
 tr:hover .noteadd{opacity:1}
 .noteadd:hover{color:var(--accent)}
@@ -148,6 +155,7 @@ button.reassign:hover{color:var(--accent)!important}
     <select id="periodSel" title="Période"></select>
     <button id="uploadBtn" class="primary" data-i18n="import">Importer</button>
     <button id="mapBtn" title="Compte → poste" data-i18n="mapping">Mapping</button>
+    <button id="secBtn" title="Sécurité / 2FA">🔒</button>
     <button id="langBtn" title="Langue / Language">EN</button>
     <button id="logoutBtn" title="Se déconnecter" data-i18n="logout">Déconnexion</button>
   </div>
@@ -257,6 +265,17 @@ button.reassign:hover{color:var(--accent)!important}
       <button id="noteDelete" class="danger">Supprimer</button>
       <button id="noteCancel">Annuler</button>
       <button id="noteSave" class="primary">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="secModal">
+  <div class="modalbox">
+    <h3>Sécurité — authentification à deux facteurs (2FA)</h3>
+    <div id="secBody"></div>
+    <div class="upstatus" id="secStatus"></div>
+    <div class="actions">
+      <button id="secClose">Fermer</button>
     </div>
   </div>
 </div>
@@ -688,6 +707,57 @@ async function deleteNote(){
   await saveNote();
 }
 
+// ---------------------------- sécurité / 2FA ----------------------------
+function closeSec(){document.getElementById('secModal').classList.remove('open');}
+async function openSec(){
+  document.getElementById('secStatus').textContent="";
+  document.getElementById('secModal').classList.add('open');
+  await renderSec();
+}
+async function renderSec(){
+  const body=document.getElementById('secBody');
+  body.innerHTML="Chargement…";
+  let st;
+  try{st=await api('/api/2fa/status');}catch(e){body.innerHTML="Erreur : "+e.message;return;}
+  if(st.enabled){
+    body.innerHTML=`<p class="ok">✓ 2FA activé.</p>
+      <p>Chaque connexion demande votre mot de passe puis un code à 6 chiffres.</p>
+      <button class="danger" id="sec2faOff">Désactiver le 2FA</button>`;
+    body.querySelector('#sec2faOff').onclick=async()=>{
+      if(!confirm("Désactiver le 2FA ? La connexion ne demandera plus que le mot de passe."))return;
+      try{await api('/api/2fa/disable',{method:'POST'});await renderSec();}
+      catch(e){document.getElementById('secStatus').textContent="Échec : "+e.message;}
+    };
+  } else {
+    body.innerHTML=`<p>Ajoutez un code à usage unique (application Google Authenticator, Microsoft Authenticator, Authy…) en plus du mot de passe.</p>
+      <button class="act" id="sec2faStart">Activer le 2FA</button>`;
+    body.querySelector('#sec2faStart').onclick=startSetup;
+  }
+}
+async function startSetup(){
+  const body=document.getElementById('secBody');
+  body.innerHTML="Génération…";
+  let d;
+  try{d=await api('/api/2fa/setup',{method:'POST'});}catch(e){body.innerHTML="Erreur : "+e.message;return;}
+  body.innerHTML=`<p>1. Scannez ce QR code avec votre application d'authentification :</p>
+    ${d.qr_svg}
+    <p>Ou saisissez cette clé manuellement :</p>
+    <div class="secret">${esc(d.secret)}</div>
+    <p>2. Entrez le code à 6 chiffres affiché pour confirmer :</p>
+    <input type="text" id="secCode" inputmode="numeric" maxlength="6" placeholder="123456">
+    <button class="act" id="secActivate">Confirmer et activer</button>`;
+  const inp=body.querySelector('#secCode');inp.focus();
+  body.querySelector('#secActivate').onclick=async()=>{
+    const fd=new FormData();fd.append('code',inp.value.trim());
+    try{
+      await api('/api/2fa/activate',{method:'POST',body:fd});
+      document.getElementById('secStatus').style.color="#16a34a";
+      document.getElementById('secStatus').textContent="2FA activé ✓";
+      await renderSec();
+    }catch(e){document.getElementById('secStatus').style.color="#dc2626";document.getElementById('secStatus').textContent="Échec : "+e.message;}
+  };
+}
+
 // ---------------------------- boot ----------------------------
 function wireStatic(){
   initColPicker();
@@ -725,6 +795,8 @@ function wireStatic(){
     document.getElementById('noteText').value=NOTES[document.getElementById('noteLine').value]||"";
     refreshNoteState();
   });
+  document.getElementById('secBtn').onclick=openSec;
+  document.getElementById('secClose').onclick=closeSec;
 }
 async function boot(forcePeriod){
   await loadMappingMeta();

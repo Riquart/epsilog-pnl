@@ -60,7 +60,23 @@ S'ils sont absents, les tests sont *skipped*.
    `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
    Healthcheck : `/health`.
 5. **Sécurité** : ne jamais committer les `.xlsx` réels ni `.env` (cf. `.gitignore`). Garder l'app
-   derrière le mot de passe ; envisager une restriction par IP côté Railway.
+   derrière le mot de passe.
+
+### Sécurité intégrée
+
+- **Mot de passe partagé** (`APP_PASSWORD`) + cookie de session signé (`SECRET_KEY`). L'app
+  **refuse de démarrer** si `SECRET_KEY` est absente/par défaut alors qu'`APP_PASSWORD` est défini.
+- **2FA TOTP** (optionnel, via le bouton 🔒 dans l'app) : mot de passe **+** code à 6 chiffres
+  (Google/Microsoft Authenticator, Authy…). Secret stocké côté serveur (`DATA_DIR/auth.json`),
+  désactivé tant qu'il n'est pas enrôlé.
+  - *Récupération* si perte de l'authenticator : variable `RESET_2FA=1` (redéploie → 2FA remis à
+    zéro), puis **retirer** la variable et ré-enrôler.
+- **Anti-brute-force** : blocage temporaire par IP après 6 échecs (login ou code) en 10 min.
+- **En-têtes de sécurité** : CSP, HSTS, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`.
+- **Cookies `Secure`** (HTTPS) par défaut ; en local sur http, mettre `COOKIE_SECURE=0`.
+
+Variables : `APP_PASSWORD`, `SECRET_KEY`, `DATA_DIR`, + optionnelles `COOKIE_SECURE` (0 en local)
+et `RESET_2FA` (récupération 2FA).
 
 ---
 
