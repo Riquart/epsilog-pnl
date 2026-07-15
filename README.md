@@ -64,8 +64,15 @@ S'ils sont absents, les tests sont *skipped*.
 
 ### Sécurité intégrée
 
-- **Mot de passe partagé** (`APP_PASSWORD`) + cookie de session signé (`SECRET_KEY`). L'app
-  **refuse de démarrer** si `SECRET_KEY` est absente/par défaut alors qu'`APP_PASSWORD` est défini.
+- **Comptes individuels** : chaque personne a **email + mot de passe** (haché PBKDF2) et son
+  **propre 2FA**. Rôles **admin** (tout) / **lecteur** (lecture seule). Gestion via le bouton 🔒
+  (admin) : créer/supprimer, changer le rôle, désactiver, réinitialiser mot de passe ou 2FA.
+  - **Compte admin initial** amorcé automatiquement depuis `APP_PASSWORD` : connecte-toi avec
+    `ADMIN_EMAIL` (variable, ex. `benoit.riquart@cgm.com`) + `APP_PASSWORD`, puis crée les autres.
+  - **Journal d'audit** (connexions, imports, modifs mapping/notes, gestion utilisateurs),
+    consultable par les admins dans le panneau 🔒.
+- Cookie de session signé (`SECRET_KEY`). L'app **refuse de démarrer** si `SECRET_KEY` est
+  absente/par défaut alors qu'`APP_PASSWORD` est défini.
 - **2FA TOTP** (optionnel, via le bouton 🔒 dans l'app) : mot de passe **+** code à 6 chiffres
   (Google/Microsoft Authenticator, Authy…). Secret stocké côté serveur (`DATA_DIR/auth.json`),
   désactivé tant qu'il n'est pas enrôlé.
@@ -75,8 +82,9 @@ S'ils sont absents, les tests sont *skipped*.
 - **En-têtes de sécurité** : CSP, HSTS, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`.
 - **Cookies `Secure`** (HTTPS) par défaut ; en local sur http, mettre `COOKIE_SECURE=0`.
 
-Variables : `APP_PASSWORD`, `SECRET_KEY`, `DATA_DIR`, + optionnelles `COOKIE_SECURE` (0 en local)
-et `RESET_2FA` (récupération 2FA).
+Variables : `APP_PASSWORD` (mdp admin initial), `SECRET_KEY`, `DATA_DIR`, `ADMIN_EMAIL`
+(email de l'admin initial), + optionnelles `COOKIE_SECURE` (0 en local) et `RESET_2FA`
+(récupération 2FA de l'admin).
 
 ---
 

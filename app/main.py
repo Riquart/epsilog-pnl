@@ -7,23 +7,27 @@ import time
 from typing import Dict, Optional
 
 import pyotp
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import store
 from .auth import (
+    APP_PASSWORD,
     AuthMiddleware,
     COOKIE_NAME,
     PRE_COOKIE_NAME,
     SecurityHeadersMiddleware,
-    check_password,
+    auth_enabled,
     clear_fails,
     client_ip,
-    has_pre_auth,
+    current_user,
+    hash_password,
     is_locked,
+    pre_auth_email,
     record_fail,
     set_session_cookie,
+    verify_password,
 )
 from .parsing.detail import build_drill, parse_detail
 from .parsing.mapping import PROVISIONAL_BANNER, Mapper
@@ -35,10 +39,30 @@ POSTE_LABELS = [lbl for lbl, _lvl, kind in STRUCT if kind != "header"]
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 
-# Recovery escape hatch: set RESET_2FA=1 to wipe 2FA config on startup (use if you
-# lose access to your authenticator, then remove the variable).
+# Recovery escape hatch: set RESET_2FA=1 to wipe the current user's 2FA on startup.
 if os.environ.get("RESET_2FA") in ("1", "true", "True"):
     store.save_auth({"totp_secret": None, "enabled": False})
+    email = os.environ.get("ADMIN_EMAIL", "admin").strip().lower()
+    if store.get_user(email):
+        store.upsert_user(email, {"totp_secret": None, "totp_enabled": False})
+
+# Bootstrap the first admin from APP_PASSWORD so access is never interrupted.
+def _bootstrap_admin():
+    if not APP_PASSWORD or store.get_users():
+        return
+    email = os.environ.get("ADMIN_EMAIL", "admin").strip().lower()
+    store.upsert_user(email, {
+        "pw_hash": hash_password(APP_PASSWORD),
+        "role": "admin",
+        "totp_secret": None,
+        "totp_enabled": False,
+        "disabled": False,
+        "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+    })
+    store.audit(email, "bootstrap_admin", "compte admin initial créé depuis APP_PASSWORD")
+
+
+_bootstrap_admin()
 
 app = FastAPI(title="EPSILOG P&L Dashboard")
 app.add_middleware(AuthMiddleware)
@@ -56,6 +80,31 @@ def _qr_svg(data: str) -> str:
     svg = buf.getvalue().decode()
     i = svg.find("<svg")  # drop any <?xml …?> prolog for safe inline insertion
     return svg[i:] if i >= 0 else svg
+
+
+# -------------------------------------------------- authorization ---
+
+def require_user(request: Request) -> str:
+    """Dependency: any authenticated user (email), or 'dev' when auth is disabled."""
+    if not auth_enabled():
+        return "dev"
+    email = current_user(request)
+    if not email:
+        raise HTTPException(status_code=401, detail="Authentification requise")
+    return email
+
+
+def require_admin(request: Request) -> str:
+    """Dependency: user must have the admin role (open in dev/no-auth mode)."""
+    if not auth_enabled():
+        return "dev"
+    email = current_user(request)
+    if not email:
+        raise HTTPException(status_code=401, detail="Authentification requise")
+    user = store.get_user(email)
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Réservé aux administrateurs")
+    return email
 
 
 # ----------------------------------------------------- snapshot assembly ---
@@ -141,21 +190,25 @@ def index():
 # ------------------------------------------------------------- auth API ---
 
 @app.post("/api/login")
-async def api_login(request: Request, password: str = Form("")):
+async def api_login(request: Request, email: str = Form(""), password: str = Form("")):
     ip = client_ip(request)
     if is_locked(ip):
         raise HTTPException(status_code=429, detail="Trop de tentatives. Réessayez dans quelques minutes.")
-    if not check_password(password):
+    email = (email or "").strip().lower()
+    user = store.get_user(email)
+    ok = bool(user) and not user.get("disabled") and verify_password(password, user.get("pw_hash", ""))
+    if not ok:
         record_fail(ip)
-        raise HTTPException(status_code=401, detail="Mot de passe incorrect")
-    auth = store.get_auth()
-    if auth.get("enabled") and auth.get("totp_secret"):
+        store.audit(email or "?", "login_failed", ip)
+        raise HTTPException(status_code=401, detail="Identifiant ou mot de passe incorrect")
+    if user.get("totp_enabled") and user.get("totp_secret"):
         resp = JSONResponse({"ok": True, "step": "2fa"})
-        set_session_cookie(resp, "pre")  # password verified, awaiting code
+        set_session_cookie(resp, "pre", email)  # password verified, awaiting code
         return resp
     clear_fails(ip)
+    store.audit(email, "login", ip)
     resp = JSONResponse({"ok": True, "step": "done"})
-    set_session_cookie(resp, "session")
+    set_session_cookie(resp, "session", email)
     return resp
 
 
@@ -164,16 +217,19 @@ async def api_2fa_verify(request: Request, code: str = Form("")):
     ip = client_ip(request)
     if is_locked(ip):
         raise HTTPException(status_code=429, detail="Trop de tentatives. Réessayez dans quelques minutes.")
-    if not has_pre_auth(request):
+    email = pre_auth_email(request)
+    if not email:
         raise HTTPException(status_code=401, detail="Session expirée, reconnectez-vous.")
-    auth = store.get_auth()
-    secret = auth.get("totp_secret")
+    user = store.get_user(email)
+    secret = (user or {}).get("totp_secret")
     if not secret or not pyotp.TOTP(secret).verify(code.strip(), valid_window=1):
         record_fail(ip)
+        store.audit(email, "login_failed", "code 2FA")
         raise HTTPException(status_code=401, detail="Code incorrect")
     clear_fails(ip)
+    store.audit(email, "login", ip)
     resp = JSONResponse({"ok": True})
-    set_session_cookie(resp, "session")
+    set_session_cookie(resp, "session", email)
     resp.delete_cookie(PRE_COOKIE_NAME)
     return resp
 
@@ -186,39 +242,132 @@ async def api_logout():
     return resp
 
 
-# 2FA enrollment (requires an authenticated session — behind AuthMiddleware).
+@app.get("/api/me")
+def api_me(request: Request):
+    if not auth_enabled():
+        return {"email": None, "role": "admin", "auth": False}
+    email = current_user(request)
+    user = store.get_user(email) if email else None
+    return {"email": email, "role": (user or {}).get("role", "viewer"), "auth": True}
+
+
+# --- per-user 2FA (operates on the current user) ---
 
 @app.get("/api/2fa/status")
-def api_2fa_status():
-    auth = store.get_auth()
-    return {"enabled": bool(auth.get("enabled")), "configured": bool(auth.get("totp_secret"))}
+def api_2fa_status(email: str = Depends(require_user)):
+    user = store.get_user(email) or {}
+    return {"enabled": bool(user.get("totp_enabled")), "configured": bool(user.get("totp_secret"))}
 
 
 @app.post("/api/2fa/setup")
-def api_2fa_setup():
-    """Generate a fresh (not-yet-enabled) secret and return its QR + otpauth URI."""
+def api_2fa_setup(email: str = Depends(require_user)):
     secret = pyotp.random_base32()
-    store.save_auth({"totp_secret": secret, "enabled": False})
-    uri = pyotp.TOTP(secret).provisioning_uri(name="EPSILOG SAS", issuer_name="EPSILOG P&L")
+    store.upsert_user(email, {"totp_secret": secret, "totp_enabled": False})
+    uri = pyotp.TOTP(secret).provisioning_uri(name=email, issuer_name="EPSILOG P&L")
     return {"secret": secret, "otpauth": uri, "qr_svg": _qr_svg(uri)}
 
 
 @app.post("/api/2fa/activate")
-async def api_2fa_activate(code: str = Form("")):
-    auth = store.get_auth()
-    secret = auth.get("totp_secret")
+async def api_2fa_activate(code: str = Form(""), email: str = Depends(require_user)):
+    user = store.get_user(email) or {}
+    secret = user.get("totp_secret")
     if not secret:
         raise HTTPException(status_code=400, detail="Lancez d'abord la configuration.")
     if not pyotp.TOTP(secret).verify(code.strip(), valid_window=1):
         raise HTTPException(status_code=401, detail="Code incorrect — vérifiez l'heure de votre téléphone.")
-    store.save_auth({"totp_secret": secret, "enabled": True})
+    store.upsert_user(email, {"totp_enabled": True})
+    store.audit(email, "2fa_enable", "")
     return {"ok": True, "enabled": True}
 
 
 @app.post("/api/2fa/disable")
-def api_2fa_disable():
-    store.save_auth({"totp_secret": None, "enabled": False})
+def api_2fa_disable(email: str = Depends(require_user)):
+    store.upsert_user(email, {"totp_secret": None, "totp_enabled": False})
+    store.audit(email, "2fa_disable", "")
     return {"ok": True, "enabled": False}
+
+
+# --- user management (admin only) ---
+
+def _user_public(email: str, u: dict) -> dict:
+    return {
+        "email": email,
+        "role": u.get("role", "viewer"),
+        "disabled": bool(u.get("disabled")),
+        "totp_enabled": bool(u.get("totp_enabled")),
+        "created_at": u.get("created_at", ""),
+    }
+
+
+@app.get("/api/users")
+def api_users(admin: str = Depends(require_admin)):
+    return {"users": [_user_public(e, u) for e, u in sorted(store.get_users().items())]}
+
+
+@app.post("/api/users")
+async def api_user_create(request: Request, admin: str = Depends(require_admin)):
+    body = await request.json()
+    email = str(body.get("email", "")).strip().lower()
+    password = str(body.get("password", ""))
+    role = "admin" if body.get("role") == "admin" else "viewer"
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Email invalide")
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Mot de passe : 8 caractères minimum")
+    if store.get_user(email):
+        raise HTTPException(status_code=409, detail="Cet utilisateur existe déjà")
+    store.upsert_user(email, {
+        "pw_hash": hash_password(password), "role": role,
+        "totp_secret": None, "totp_enabled": False, "disabled": False,
+        "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+    })
+    store.audit(admin, "user_create", f"{email} ({role})")
+    return {"ok": True}
+
+
+@app.put("/api/users/{email}")
+async def api_user_update(email: str, request: Request, admin: str = Depends(require_admin)):
+    email = email.strip().lower()
+    user = store.get_user(email)
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+    body = await request.json()
+    patch: Dict[str, object] = {}
+    if "role" in body:
+        patch["role"] = "admin" if body["role"] == "admin" else "viewer"
+    if "disabled" in body:
+        patch["disabled"] = bool(body["disabled"])
+    if body.get("password"):
+        if len(str(body["password"])) < 8:
+            raise HTTPException(status_code=400, detail="Mot de passe : 8 caractères minimum")
+        patch["pw_hash"] = hash_password(str(body["password"]))
+    if body.get("reset_2fa"):
+        patch["totp_secret"] = None
+        patch["totp_enabled"] = False
+    # Don't let the last admin lose admin / be disabled.
+    admins = [e for e, u in store.get_users().items() if u.get("role") == "admin" and not u.get("disabled")]
+    if email in admins and (patch.get("role") == "viewer" or patch.get("disabled")) and len(admins) <= 1:
+        raise HTTPException(status_code=400, detail="Impossible : c'est le dernier administrateur actif")
+    store.upsert_user(email, patch)
+    store.audit(admin, "user_update", f"{email}: {list(patch.keys())}")
+    return {"ok": True}
+
+
+@app.delete("/api/users/{email}")
+def api_user_delete(email: str, admin: str = Depends(require_admin)):
+    email = email.strip().lower()
+    if email == admin:
+        raise HTTPException(status_code=400, detail="Impossible de supprimer votre propre compte")
+    if not store.get_user(email):
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+    store.delete_user(email)
+    store.audit(admin, "user_delete", email)
+    return {"ok": True}
+
+
+@app.get("/api/audit")
+def api_audit(admin: str = Depends(require_admin), limit: int = 200):
+    return {"events": store.read_audit(limit)}
 
 
 # ------------------------------------------------------------- data API ---
@@ -244,6 +393,7 @@ async def api_upload(
     pnl: UploadFile = File(...),
     cost: Optional[UploadFile] = File(None),
     cogs: Optional[UploadFile] = File(None),
+    admin: str = Depends(require_admin),
 ):
     pnl_bytes = await pnl.read()
     cost_bytes = await cost.read() if cost is not None else None
@@ -253,6 +403,7 @@ async def api_upload(
     except Exception as e:  # noqa: BLE001 - surface parsing errors to the user
         raise HTTPException(status_code=400, detail=f"Échec du parsing : {e}")
     entry = store.save_snapshot(snap)
+    store.audit(admin, "upload", entry["period"])
     _drill, unmapped = _resolve_drill(snap)
     return {
         "ok": True,
@@ -264,9 +415,10 @@ async def api_upload(
 
 
 @app.delete("/api/snapshot")
-def api_delete(period: str):
+def api_delete(period: str, admin: str = Depends(require_admin)):
     if not store.delete_snapshot(period):
         raise HTTPException(status_code=404, detail=f"Période {period} introuvable")
+    store.audit(admin, "delete_period", period)
     return {"ok": True}
 
 
@@ -276,7 +428,7 @@ def api_get_labels():
 
 
 @app.put("/api/labels")
-async def api_put_labels(request: Request):
+async def api_put_labels(request: Request, admin: str = Depends(require_admin)):
     body = await request.json()
     if not isinstance(body, dict):
         raise HTTPException(status_code=400, detail="Format attendu : objet {compte: libellé}")
@@ -284,7 +436,7 @@ async def api_put_labels(request: Request):
 
 
 @app.put("/api/labels/{account}")
-async def api_put_one_label(account: str, request: Request):
+async def api_put_one_label(account: str, request: Request, admin: str = Depends(require_admin)):
     body = await request.json()
     label = body.get("label", "") if isinstance(body, dict) else ""
     return store.update_label(account, label)
@@ -315,16 +467,17 @@ def api_get_mapping():
 
 
 @app.put("/api/mapping")
-async def api_put_mapping(request: Request):
+async def api_put_mapping(request: Request, admin: str = Depends(require_admin)):
     """Replace the whole mapping. Body: {"rules": [{prefix, poste}, ...]} or a bare list."""
     body = await request.json()
     rules = body.get("rules", []) if isinstance(body, dict) else body
     saved = store.set_mapping_rules(rules)
+    store.audit(admin, "mapping_replace", f"{len(saved)} règles")
     return {"ok": True, "count": len(saved)}
 
 
 @app.post("/api/mapping/rule")
-async def api_upsert_rule(request: Request):
+async def api_upsert_rule(request: Request, admin: str = Depends(require_admin)):
     """Add/update a single rule. Body: {prefix, poste}. Empty poste deletes it."""
     body = await request.json()
     prefix = str(body.get("prefix", "")).strip()
@@ -332,13 +485,15 @@ async def api_upsert_rule(request: Request):
     if not prefix:
         raise HTTPException(status_code=400, detail="Préfixe/compte requis")
     saved = store.upsert_mapping_rule(prefix, poste)
+    store.audit(admin, "mapping_rule", f"{prefix} -> {poste or '(supprimé)'}")
     return {"ok": True, "count": len(saved)}
 
 
 @app.post("/api/mapping/reset")
-def api_reset_mapping():
+def api_reset_mapping(admin: str = Depends(require_admin)):
     """Discard in-app edits and re-seed from the CSV default."""
     saved = store.reset_mapping()
+    store.audit(admin, "mapping_reset", f"{len(saved)} règles")
     return {"ok": True, "count": len(saved)}
 
 
@@ -351,7 +506,7 @@ def api_get_notes(period: Optional[str] = None):
 
 
 @app.put("/api/notes")
-async def api_put_note(request: Request):
+async def api_put_note(request: Request, admin: str = Depends(require_admin)):
     """Set/clear a note on a P&L line. Body: {period, label, text}."""
     body = await request.json()
     period = str(body.get("period", "")).strip() or store.latest_period()
@@ -360,4 +515,5 @@ async def api_put_note(request: Request):
     if not period or not label:
         raise HTTPException(status_code=400, detail="Période et ligne requises")
     notes = store.set_note(period, label, text)
+    store.audit(admin, "note", f"{period} / {label}")
     return {"ok": True, "period": period, "notes": notes}

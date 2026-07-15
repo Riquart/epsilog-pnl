@@ -24,8 +24,10 @@ button:hover{filter:brightness(1.05)}
 <form class="card" id="fPw">
   <h1>EPSILOG SAS</h1>
   <p>Tableau de bord P&amp;L — accès protégé</p>
-  <label for="pw">Mot de passe</label>
-  <input type="password" id="pw" autocomplete="current-password" autofocus>
+  <label for="em">Email</label>
+  <input type="email" id="em" autocomplete="username" autofocus placeholder="prenom.nom@cgm.com">
+  <label for="pw" style="margin-top:12px;display:block">Mot de passe</label>
+  <input type="password" id="pw" autocomplete="current-password">
   <button type="submit">Se connecter</button>
   <div class="err" id="err"></div>
 </form>
@@ -41,7 +43,9 @@ button:hover{filter:brightness(1.05)}
 document.getElementById('fPw').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const err=document.getElementById('err'); err.textContent="";
-  const body=new FormData(); body.append('password', document.getElementById('pw').value);
+  const body=new FormData();
+  body.append('email', document.getElementById('em').value);
+  body.append('password', document.getElementById('pw').value);
   try{
     const r=await fetch('/api/login',{method:'POST',body});
     const j=await r.json().catch(()=>({}));

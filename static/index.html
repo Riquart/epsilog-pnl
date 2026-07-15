@@ -14,6 +14,19 @@ header .sub{color:#94a3b8;font-size:12.5px;margin-top:4px}
 .htools{display:flex;gap:8px;align-items:center}
 .htools select,.htools button{font-size:12.5px;border-radius:8px;padding:7px 11px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;cursor:pointer}
 .htools button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.ubadge{color:#cbd5e1;font-size:12px;margin-right:4px;white-space:nowrap}
+.ubadge b{color:#e2e8f0}
+.usertbl{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
+.usertbl th,.usertbl td{padding:5px 6px;border-bottom:1px solid var(--line);text-align:left}
+.usertbl td.r{text-align:right;white-space:nowrap}
+.usertbl button{border:1px solid var(--line);background:#fff;border-radius:6px;padding:3px 7px;font-size:11.5px;cursor:pointer;margin-left:3px}
+.usertbl button:hover{background:var(--soft)}
+.secsection{margin-top:20px;border-top:1px solid var(--line);padding-top:14px}
+.secsection h4{margin:0 0 6px;font-size:13.5px}
+.adduser{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.adduser input,.adduser select{padding:6px 8px;border:1px solid var(--line);border-radius:7px;font-size:12.5px}
+.auditlog{max-height:180px;overflow:auto;font-size:11.5px;font-family:ui-monospace,Menlo,monospace;background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:8px;margin-top:8px}
+.auditlog div{padding:1px 0;white-space:nowrap}
 .htools button:hover{filter:brightness(1.1)}
 .wrap{max-width:1280px;margin:0 auto;padding:22px 28px 60px}
 .kpis{display:grid;grid-template-columns:repeat(7,1fr);gap:12px;margin-bottom:22px}
@@ -48,6 +61,7 @@ tr.drill:hover{background:#eff6ff}
 .ph-actions{display:flex;gap:8px;align-items:center;flex:none}
 .noteflag{cursor:pointer;color:#d97706;font-size:12px;margin-right:4px}
 .noteflag:hover{color:#b45309}
+#secModal .modalbox{width:580px;max-height:86vh;overflow:auto}
 #secBody{font-size:13px;line-height:1.5;color:var(--ink)}
 #secBody svg{width:190px;height:190px;display:block;margin:12px auto;border:1px solid var(--line);border-radius:8px;padding:6px;background:#fff}
 #secBody .secret{font-family:ui-monospace,Menlo,monospace;background:#f1f5f9;padding:6px 10px;border-radius:6px;font-size:13px;word-break:break-all;text-align:center;margin:8px 0}
@@ -152,6 +166,7 @@ button.reassign:hover{color:var(--accent)!important}
     <div class="sub" id="meta"></div>
   </div>
   <div class="htools">
+    <span id="userBadge" class="ubadge"></span>
     <select id="periodSel" title="Période"></select>
     <button id="uploadBtn" class="primary" data-i18n="import">Importer</button>
     <button id="mapBtn" title="Compte → poste" data-i18n="mapping">Mapping</button>
@@ -282,6 +297,8 @@ button.reassign:hover{color:var(--accent)!important}
 
 <script>
 let DATA=null, BLK="monthly", acctLabels={}, NOTES={};
+let ME={email:null,role:"admin",auth:false};
+const isAdmin=()=>(!ME.auth)||ME.role==="admin";
 let CMP = (localStorage.getItem('kpiCmp')==='d_fc') ? 'd_fc' : 'd_bud';
 const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
@@ -491,7 +508,7 @@ function renderTable(){
     const cls="l"+ln.level;
     const drillable = (DATA.drill&&DATA.drill[ln.label]) ? "drill" : "";
     const flag = NOTES[ln.label] ? `<span class="noteflag" data-note="${esc(ln.label)}" title="Voir la note : ${esc(NOTES[ln.label])}">⚠</span>` : '';
-    const addNote = `<button class="noteadd" data-note="${esc(ln.label)}" title="Ajouter une note sur cette ligne">✎</button>`;
+    const addNote = isAdmin() ? `<button class="noteadd" data-note="${esc(ln.label)}" title="Ajouter une note sur cette ligne">✎</button>` : '';
     const cells=cols.map(c=>c.delta?`<td>${dcell(v[c.k],ln.polarity)}</td>`:`<td>${eur0(v[c.k])}</td>`).join('');
     tb.insertAdjacentHTML('beforeend',
       `<tr class="${cls} ${drillable}" data-label="${esc(ln.label)}"><td class="lbl">${flag}${ln.label}${addNote}</td>${cells}</tr>`);
@@ -523,7 +540,8 @@ function renderDrawer(){
   (d.accounts||[]).forEach(a=>{
     const sel=drillState.acct===a.account?'sel':'';
     const lab=acctName(a.account)?`<span class="alab">${acctName(a.account)}</span>`:`<span class="alab muted">(libellé ?)</span>`;
-    h+=`<tr class="acctrow ${sel}" data-acct="${a.account}"><td class="lbl ell"><b>${a.account}</b> <button class="ren" data-acct="${a.account}" title="Renommer ce compte">✎</button> <button class="reassign" data-acct="${a.account}" title="Déplacer ce compte vers un autre poste">⇄</button> ${lab}</td><td>${eur(a.sum)}</td></tr>`;
+    const abtns = isAdmin() ? `<button class="ren" data-acct="${a.account}" title="Renommer ce compte">✎</button> <button class="reassign" data-acct="${a.account}" title="Déplacer ce compte vers un autre poste">⇄</button>` : '';
+    h+=`<tr class="acctrow ${sel}" data-acct="${a.account}"><td class="lbl ell"><b>${a.account}</b> ${abtns} ${lab}</td><td>${eur(a.sum)}</td></tr>`;
   });
   h+='</tbody></table>';
   let lines=[];
@@ -566,6 +584,17 @@ let POSTES=[], MAPRULES=[];
 async function loadMappingMeta(){
   try{const d=await api('/api/mapping');POSTES=d.postes||[];MAPRULES=d.rules||[];}
   catch(e){POSTES=[];MAPRULES=[];}
+}
+async function loadMe(){try{ME=await api('/api/me');}catch(e){ME={email:null,role:"viewer",auth:true};}}
+function applyRole(){
+  const admin=isAdmin();
+  const badge=document.getElementById('userBadge');
+  if(ME.email){badge.innerHTML=`<b>${esc(ME.email)}</b> · ${admin?'admin':(LANG==='fr'?'lecteur':'viewer')}`;}
+  else{badge.textContent="";}
+  // admin-only controls
+  ['uploadBtn','mapBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=admin?'':'none';});
+  const nb=document.getElementById('noteBtn');if(nb)nb.style.display=admin?'':'none';
+  if(DATA)renderTable();  // re-render to show/hide note pencils
 }
 function posteOptions(sel){return POSTES.map(p=>`<option value="${p}" ${p===sel?'selected':''}>${p}</option>`).join('');}
 
@@ -687,8 +716,12 @@ function openNote(label){
 function refreshNoteState(){
   const cur=document.getElementById('noteLine').value;
   const exists=!!NOTES[cur];
+  const admin=isAdmin();
   document.getElementById('noteTitle').textContent=(exists?"Note — ":"Ajouter une note — ")+cur;
-  document.getElementById('noteDelete').style.display=exists?"inline-block":"none";
+  document.getElementById('noteDelete').style.display=(admin&&exists)?"inline-block":"none";
+  document.getElementById('noteSave').style.display=admin?"inline-block":"none";
+  document.getElementById('noteText').readOnly=!admin;
+  document.getElementById('noteLine').disabled=!admin&&exists;
 }
 function closeNote(){document.getElementById('noteModal').classList.remove('open');}
 async function saveNote(){
@@ -716,46 +749,90 @@ async function openSec(){
 }
 async function renderSec(){
   const body=document.getElementById('secBody');
-  body.innerHTML="Chargement…";
+  body.innerHTML=`<div id="sec2fa">Chargement…</div>`+
+    (isAdmin()?`<div class="secsection" id="secUsers"></div><div class="secsection" id="secAudit"></div>`:'');
+  await render2fa();
+  if(isAdmin()){await renderUsers();loadAudit();}
+}
+async function render2fa(){
+  const box=document.getElementById('sec2fa');
   let st;
-  try{st=await api('/api/2fa/status');}catch(e){body.innerHTML="Erreur : "+e.message;return;}
+  try{st=await api('/api/2fa/status');}catch(e){box.innerHTML="Erreur : "+e.message;return;}
   if(st.enabled){
-    body.innerHTML=`<p class="ok">✓ 2FA activé.</p>
-      <p>Chaque connexion demande votre mot de passe puis un code à 6 chiffres.</p>
-      <button class="danger" id="sec2faOff">Désactiver le 2FA</button>`;
-    body.querySelector('#sec2faOff').onclick=async()=>{
-      if(!confirm("Désactiver le 2FA ? La connexion ne demandera plus que le mot de passe."))return;
-      try{await api('/api/2fa/disable',{method:'POST'});await renderSec();}
-      catch(e){document.getElementById('secStatus').textContent="Échec : "+e.message;}
+    box.innerHTML=`<h4>Mon authentification (2FA)</h4><p class="ok">✓ Activé.</p>
+      <button class="danger" id="sec2faOff">Désactiver mon 2FA</button>`;
+    box.querySelector('#sec2faOff').onclick=async()=>{
+      if(!confirm("Désactiver votre 2FA ?"))return;
+      try{await api('/api/2fa/disable',{method:'POST'});await render2fa();}catch(e){alert(e.message);}
     };
   } else {
-    body.innerHTML=`<p>Ajoutez un code à usage unique (application Google Authenticator, Microsoft Authenticator, Authy…) en plus du mot de passe.</p>
+    box.innerHTML=`<h4>Mon authentification (2FA)</h4>
+      <p>Ajoutez un code à usage unique (Google/Microsoft Authenticator, Authy…) en plus du mot de passe.</p>
       <button class="act" id="sec2faStart">Activer le 2FA</button>`;
-    body.querySelector('#sec2faStart').onclick=startSetup;
+    box.querySelector('#sec2faStart').onclick=startSetup;
   }
 }
 async function startSetup(){
-  const body=document.getElementById('secBody');
-  body.innerHTML="Génération…";
+  const box=document.getElementById('sec2fa');
+  box.innerHTML="Génération…";
   let d;
-  try{d=await api('/api/2fa/setup',{method:'POST'});}catch(e){body.innerHTML="Erreur : "+e.message;return;}
-  body.innerHTML=`<p>1. Scannez ce QR code avec votre application d'authentification :</p>
-    ${d.qr_svg}
-    <p>Ou saisissez cette clé manuellement :</p>
-    <div class="secret">${esc(d.secret)}</div>
-    <p>2. Entrez le code à 6 chiffres affiché pour confirmer :</p>
+  try{d=await api('/api/2fa/setup',{method:'POST'});}catch(e){box.innerHTML="Erreur : "+e.message;return;}
+  box.innerHTML=`<h4>Activer le 2FA</h4>
+    <p>1. Scannez ce QR code :</p>${d.qr_svg}
+    <p>Ou saisissez cette clé :</p><div class="secret">${esc(d.secret)}</div>
+    <p>2. Entrez le code à 6 chiffres pour confirmer :</p>
     <input type="text" id="secCode" inputmode="numeric" maxlength="6" placeholder="123456">
     <button class="act" id="secActivate">Confirmer et activer</button>`;
-  const inp=body.querySelector('#secCode');inp.focus();
-  body.querySelector('#secActivate').onclick=async()=>{
+  const inp=box.querySelector('#secCode');inp.focus();
+  box.querySelector('#secActivate').onclick=async()=>{
     const fd=new FormData();fd.append('code',inp.value.trim());
-    try{
-      await api('/api/2fa/activate',{method:'POST',body:fd});
-      document.getElementById('secStatus').style.color="#16a34a";
-      document.getElementById('secStatus').textContent="2FA activé ✓";
-      await renderSec();
-    }catch(e){document.getElementById('secStatus').style.color="#dc2626";document.getElementById('secStatus').textContent="Échec : "+e.message;}
+    try{await api('/api/2fa/activate',{method:'POST',body:fd});await render2fa();}
+    catch(e){alert("Échec : "+e.message);}
   };
+}
+async function renderUsers(){
+  const box=document.getElementById('secUsers');if(!box)return;
+  let d;try{d=await api('/api/users');}catch(e){box.innerHTML="Erreur : "+e.message;return;}
+  const rows=d.users.map(u=>`<tr>
+    <td>${esc(u.email)}</td>
+    <td>${u.role==='admin'?'admin':'lecteur'}${u.disabled?' · <span class="neg">désactivé</span>':''}${u.totp_enabled?' · 🔒':''}</td>
+    <td class="r">
+      <button data-act="role" data-e="${esc(u.email)}" data-v="${u.role==='admin'?'viewer':'admin'}">${u.role==='admin'?'→ lecteur':'→ admin'}</button>
+      <button data-act="dis" data-e="${esc(u.email)}" data-v="${u.disabled?'0':'1'}">${u.disabled?'Réactiver':'Désactiver'}</button>
+      <button data-act="pw" data-e="${esc(u.email)}">MDP</button>
+      <button data-act="r2fa" data-e="${esc(u.email)}">Reset 2FA</button>
+      <button data-act="del" data-e="${esc(u.email)}">✕</button>
+    </td></tr>`).join('');
+  box.innerHTML=`<h4>Utilisateurs</h4>
+    <table class="usertbl"><thead><tr><th>Email</th><th>Rôle</th><th class="r">Actions</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="adduser">
+      <input type="email" id="nuEmail" placeholder="email@cgm.com">
+      <input type="password" id="nuPw" placeholder="mot de passe (8+)">
+      <select id="nuRole"><option value="viewer">Lecteur</option><option value="admin">Admin</option></select>
+      <button class="colbtn" id="nuAdd">+ Ajouter</button>
+    </div>`;
+  box.querySelectorAll('button[data-act]').forEach(b=>b.onclick=()=>userAction(b.dataset.act,b.dataset.e,b.dataset.v));
+  box.querySelector('#nuAdd').onclick=async()=>{
+    const email=box.querySelector('#nuEmail').value.trim(), pw=box.querySelector('#nuPw').value, role=box.querySelector('#nuRole').value;
+    try{await api('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pw,role})});await renderUsers();loadAudit();}
+    catch(e){alert("Échec : "+e.message);}
+  };
+}
+async function userAction(act,email,val){
+  try{
+    if(act==='del'){if(!confirm("Supprimer "+email+" ?"))return;await api('/api/users/'+encodeURIComponent(email),{method:'DELETE'});}
+    else if(act==='role')await api('/api/users/'+encodeURIComponent(email),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({role:val})});
+    else if(act==='dis')await api('/api/users/'+encodeURIComponent(email),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({disabled:val==='1'})});
+    else if(act==='r2fa'){if(!confirm("Réinitialiser le 2FA de "+email+" ?"))return;await api('/api/users/'+encodeURIComponent(email),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({reset_2fa:true})});}
+    else if(act==='pw'){const p=prompt("Nouveau mot de passe pour "+email+" (8+ car.) :");if(!p)return;await api('/api/users/'+encodeURIComponent(email),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:p})});}
+    await renderUsers();loadAudit();
+  }catch(e){alert("Échec : "+e.message);}
+}
+async function loadAudit(){
+  const box=document.getElementById('secAudit');if(!box)return;
+  let d;try{d=await api('/api/audit?limit=50');}catch(e){box.innerHTML="";return;}
+  const lines=d.events.map(e=>`<div>${esc(e.ts)} · <b>${esc(e.user)}</b> · ${esc(e.action)}${e.detail?' · '+esc(e.detail):''}</div>`).join('');
+  box.innerHTML=`<h4>Journal d'audit <small class="cap">(50 derniers)</small></h4><div class="auditlog">${lines||'—'}</div>`;
 }
 
 // ---------------------------- boot ----------------------------
@@ -764,7 +841,7 @@ function wireStatic(){
   applyLang();
   document.getElementById('langBtn').onclick=()=>{
     LANG=(LANG==='fr')?'en':'fr';localStorage.setItem('lang',LANG);
-    applyLang();buildColMenu();
+    applyLang();buildColMenu();applyRole();
     if(DATA)renderAll();else updateForecastOption();
   };
   document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
@@ -799,6 +876,8 @@ function wireStatic(){
   document.getElementById('secClose').onclick=closeSec;
 }
 async function boot(forcePeriod){
+  await loadMe();
+  applyRole();
   await loadMappingMeta();
   const {periods,latest}=await loadPeriods();
   const dash=document.getElementById('dash'), empty=document.getElementById('empty');

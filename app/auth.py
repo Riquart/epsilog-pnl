@@ -7,12 +7,13 @@
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import os
 import time
 from collections import defaultdict
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from fastapi import Request
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -43,55 +44,97 @@ _OPEN_PATHS = {"/health", "/login", "/api/login", "/api/2fa/verify", "/favicon.i
 _OPEN_PREFIXES = ("/static/login",)
 
 
+# ------------------------------------------------- password hashing ---
+
+def hash_password(pw: str, iterations: int = 200_000) -> str:
+    salt = os.urandom(16)
+    dk = hashlib.pbkdf2_hmac("sha256", (pw or "").encode(), salt, iterations)
+    return f"pbkdf2_sha256${iterations}${salt.hex()}${dk.hex()}"
+
+
+def verify_password(pw: str, stored: str) -> bool:
+    try:
+        algo, iters, salt_hex, hash_hex = (stored or "").split("$")
+        if algo != "pbkdf2_sha256":
+            return False
+        dk = hashlib.pbkdf2_hmac(
+            "sha256", (pw or "").encode(), bytes.fromhex(salt_hex), int(iters)
+        )
+        return hmac.compare_digest(dk.hex(), hash_hex)
+    except (ValueError, AttributeError):
+        return False
+
+
 # ------------------------------------------------------------- tokens ---
+# Token format: "<scope>.<email_b64>.<issued>.<sig>", sig over the first 3 parts.
 
 def _sign(payload: str) -> str:
     return hmac.new(SECRET_KEY.encode(), payload.encode(), hashlib.sha256).hexdigest()
 
 
-def make_token(scope: str = "session") -> str:
+def _b64(s: str) -> str:
+    return base64.urlsafe_b64encode(s.encode()).decode().rstrip("=")
+
+
+def _unb64(s: str) -> str:
+    pad = "=" * (-len(s) % 4)
+    return base64.urlsafe_b64decode(s + pad).decode()
+
+
+def make_token(scope: str = "session", email: str = "") -> str:
     issued = str(int(time.time()))
-    body = f"{scope}.{issued}"
+    body = f"{scope}.{_b64(email)}.{issued}"
     return f"{body}.{_sign(body)}"
 
 
-def valid_token(token: str, scope: str = "session", ttl: int = SESSION_TTL) -> bool:
-    if not token or token.count(".") != 2:
-        return False
-    tscope, issued, sig = token.split(".")
+def token_email(token: str, scope: str = "session", ttl: int = SESSION_TTL) -> Optional[str]:
+    """Return the email carried by a valid token for ``scope``, else None."""
+    if not token or token.count(".") != 3:
+        return None
+    tscope, email_b64, issued, sig = token.split(".")
     if tscope != scope:
-        return False
-    if not hmac.compare_digest(_sign(f"{tscope}.{issued}"), sig):
-        return False
+        return None
+    if not hmac.compare_digest(_sign(f"{tscope}.{email_b64}.{issued}"), sig):
+        return None
     try:
-        return (time.time() - int(issued)) < ttl
-    except ValueError:
-        return False
+        if (time.time() - int(issued)) >= ttl:
+            return None
+        return _unb64(email_b64)
+    except (ValueError, Exception):
+        return None
 
 
 # ------------------------------------------------------------- checks ---
 
-def check_password(candidate: str) -> bool:
-    if not APP_PASSWORD:
-        return True  # open (local dev convenience)
-    return hmac.compare_digest(candidate or "", APP_PASSWORD)
+def auth_enabled() -> bool:
+    """Auth is enforced if a shared password is set OR any user account exists."""
+    if APP_PASSWORD:
+        return True
+    from . import store  # lazy to avoid import cycle
+    return bool(store.get_users())
+
+
+def current_user(request: Request) -> Optional[str]:
+    """Email of the authenticated user (session cookie), or None."""
+    return token_email(request.cookies.get(COOKIE_NAME, ""), "session", SESSION_TTL)
+
+
+def pre_auth_email(request: Request) -> Optional[str]:
+    """Email of a password-verified user awaiting 2FA (pre cookie), or None."""
+    return token_email(request.cookies.get(PRE_COOKIE_NAME, ""), "pre", PRE_TTL)
 
 
 def is_authenticated(request: Request) -> bool:
-    if not APP_PASSWORD:
+    if not auth_enabled():
         return True
-    return valid_token(request.cookies.get(COOKIE_NAME, ""), "session", SESSION_TTL)
+    return current_user(request) is not None
 
 
-def has_pre_auth(request: Request) -> bool:
-    return valid_token(request.cookies.get(PRE_COOKIE_NAME, ""), "pre", PRE_TTL)
-
-
-def set_session_cookie(resp, scope: str = "session"):
+def set_session_cookie(resp, scope: str = "session", email: str = ""):
     name = COOKIE_NAME if scope == "session" else PRE_COOKIE_NAME
     max_age = SESSION_TTL if scope == "session" else PRE_TTL
     resp.set_cookie(
-        name, make_token(scope), max_age=max_age,
+        name, make_token(scope, email), max_age=max_age,
         httponly=True, samesite="lax", secure=COOKIE_SECURE,
     )
 
@@ -126,7 +169,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
         if (
-            not APP_PASSWORD
+            not auth_enabled()
             or path in _OPEN_PATHS
             or any(path.startswith(p) for p in _OPEN_PREFIXES)
         ):

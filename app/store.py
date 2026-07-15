@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+import time
 from typing import Dict, List, Optional
 
 DATA_DIR = os.environ.get("DATA_DIR", os.path.join(os.path.dirname(os.path.dirname(__file__)), "data"))
@@ -19,6 +20,8 @@ LABELS_FILE = "account_labels.json"
 MAPPING_FILE = "mapping.json"
 NOTES_FILE = "notes.json"
 AUTH_FILE = "auth.json"
+USERS_FILE = "users.json"
+AUDIT_FILE = "audit.jsonl"
 
 _lock = threading.Lock()
 
@@ -210,7 +213,7 @@ def set_note(period: str, label: str, text: str) -> Dict[str, str]:
 # --------------------------------------------------------- 2FA / auth ---
 
 def get_auth() -> dict:
-    """TOTP config: {"totp_secret": str|None, "enabled": bool}."""
+    """Legacy shared-TOTP config (kept for single-user mode)."""
     return _read_json(AUTH_FILE, {"totp_secret": None, "enabled": False})
 
 
@@ -218,3 +221,66 @@ def save_auth(data: dict) -> dict:
     with _lock:
         _write_json(AUTH_FILE, data)
         return data
+
+
+# ------------------------------------------------------------- users ---
+
+def get_users() -> Dict[str, dict]:
+    return _read_json(USERS_FILE, {})
+
+
+def get_user(email: str) -> Optional[dict]:
+    return get_users().get((email or "").strip().lower())
+
+
+def upsert_user(email: str, data: dict) -> dict:
+    email = (email or "").strip().lower()
+    with _lock:
+        users = _read_json(USERS_FILE, {})
+        users[email] = {**users.get(email, {}), **data}
+        _write_json(USERS_FILE, users)
+        return users[email]
+
+
+def delete_user(email: str) -> None:
+    email = (email or "").strip().lower()
+    with _lock:
+        users = _read_json(USERS_FILE, {})
+        users.pop(email, None)
+        _write_json(USERS_FILE, users)
+
+
+# ------------------------------------------------------------- audit ---
+
+def audit(user: str, action: str, detail: str = "") -> None:
+    _ensure_dir()
+    entry = {
+        "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "user": user or "?",
+        "action": action,
+        "detail": detail,
+    }
+    with _lock:
+        with open(_path(AUDIT_FILE), "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+def read_audit(limit: int = 200) -> List[dict]:
+    p = _path(AUDIT_FILE)
+    if not os.path.exists(p):
+        return []
+    try:
+        with open(p, encoding="utf-8") as f:
+            lines = f.readlines()
+    except OSError:
+        return []
+    out = []
+    for line in lines[-limit:]:
+        line = line.strip()
+        if line:
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    out.reverse()  # newest first
+    return out
