@@ -79,16 +79,22 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
-def _qr_svg(data: str) -> str:
-    import qrcode
-    import qrcode.image.svg
+def _qr_datauri(data: str) -> str:
+    """Return the QR as an SVG data: URI (rendered via <img>, CSP-friendly).
+    Empty string on failure — the frontend falls back to the manual secret."""
+    try:
+        import base64
 
-    img = qrcode.make(data, image_factory=qrcode.image.svg.SvgImage, box_size=8, border=2)
-    buf = io.BytesIO()
-    img.save(buf)
-    svg = buf.getvalue().decode()
-    i = svg.find("<svg")  # drop any <?xml …?> prolog for safe inline insertion
-    return svg[i:] if i >= 0 else svg
+        import qrcode
+        import qrcode.image.svg
+
+        img = qrcode.make(data, image_factory=qrcode.image.svg.SvgImage, box_size=10, border=2)
+        buf = io.BytesIO()
+        img.save(buf)
+        b64 = base64.b64encode(buf.getvalue()).decode()
+        return "data:image/svg+xml;base64," + b64
+    except Exception:  # noqa: BLE001
+        return ""
 
 
 # -------------------------------------------------- authorization ---
@@ -273,7 +279,7 @@ def api_2fa_setup(email: str = Depends(require_user)):
     secret = pyotp.random_base32()
     store.upsert_user(email, {"totp_secret": secret, "totp_enabled": False})
     uri = pyotp.TOTP(secret).provisioning_uri(name=email, issuer_name="EPSILOG P&L")
-    return {"secret": secret, "otpauth": uri, "qr_svg": _qr_svg(uri)}
+    return {"secret": secret, "otpauth": uri, "qr_datauri": _qr_datauri(uri)}
 
 
 @app.post("/api/2fa/activate")

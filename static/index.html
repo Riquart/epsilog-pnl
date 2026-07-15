@@ -63,7 +63,7 @@ tr.drill:hover{background:#eff6ff}
 .noteflag:hover{color:#b45309}
 #secModal .modalbox{width:580px;max-height:86vh;overflow:auto}
 #secBody{font-size:13px;line-height:1.5;color:var(--ink)}
-#secBody svg{width:190px;height:190px;display:block;margin:12px auto;border:1px solid var(--line);border-radius:8px;padding:6px;background:#fff}
+#secBody img.qr{width:190px;height:190px;display:block;margin:12px auto;border:1px solid var(--line);border-radius:8px;padding:6px;background:#fff}
 #secBody .secret{font-family:ui-monospace,Menlo,monospace;background:#f1f5f9;padding:6px 10px;border-radius:6px;font-size:13px;word-break:break-all;text-align:center;margin:8px 0}
 #secBody input{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin:8px 0}
 #secBody .ok{color:var(--pos);font-weight:700}
@@ -778,8 +778,8 @@ async function startSetup(){
   let d;
   try{d=await api('/api/2fa/setup',{method:'POST'});}catch(e){box.innerHTML="Erreur : "+e.message;return;}
   box.innerHTML=`<h4>Activer le 2FA</h4>
-    <p>1. Scannez ce QR code :</p>${d.qr_svg}
-    <p>Ou saisissez cette clé :</p><div class="secret">${esc(d.secret)}</div>
+    ${d.qr_datauri?`<p>1. Scannez ce QR code :</p><img class="qr" src="${d.qr_datauri}" alt="QR 2FA">`:''}
+    <p>${d.qr_datauri?'Ou saisissez':'Saisissez'} cette clé dans votre application :</p><div class="secret">${esc(d.secret)}</div>
     <p>2. Entrez le code à 6 chiffres pour confirmer :</p>
     <input type="text" id="secCode" inputmode="numeric" maxlength="6" placeholder="123456">
     <button class="act" id="secActivate">Confirmer et activer</button>`;
