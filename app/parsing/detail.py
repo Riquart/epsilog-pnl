@@ -31,6 +31,10 @@ _COMPTE_RE = re.compile(r"\s*Compte\s*([0-9A-Z]+)")
 ExcelSource = Union[str, bytes, BytesIO]
 
 
+# Dedicated per-row account column (newer export format).
+ACCOUNT_COL_CANDIDATES = ("compte général", "compte general", "g/l account", "compte du grand livre")
+
+
 def _parse_compte(x) -> Optional[str]:
     if isinstance(x, str):
         m = _COMPTE_RE.match(x)
@@ -38,32 +42,54 @@ def _parse_compte(x) -> Optional[str]:
     return None
 
 
+def _acct_str(v) -> Optional[str]:
+    """Normalise an account cell to a string (6000000, 6001500FR…), None if empty."""
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return None
+    if isinstance(v, float) and v.is_integer():
+        return str(int(v))
+    if isinstance(v, int):
+        return str(v)
+    s = str(v).strip()
+    return s or None
+
+
 def parse_detail(src: ExcelSource, max_lines_per_account: int = 200) -> Dict[str, dict]:
     """Return ``{account: {"sum": float, "lines": [{date, text, amount}, ...]}}``.
 
-    Amounts are recomputed from detail rows only (posting type present), never from
-    the multi-level subtotal/header rows that SAP interleaves in the outline.
+    Supports two SAP export layouts:
+      1. a dedicated per-row account column (e.g. "Compte général"); or
+      2. group rows in column A formatted ``Compte NNNNNNN`` (header at the bottom
+         of its group → backward-fill).
+    Amounts are recomputed from detail rows only (posting type present).
     """
     if isinstance(src, (bytes, bytearray)):
         df = pd.read_excel(BytesIO(src), sheet_name=0)
     else:
         df = pd.read_excel(src, sheet_name=0)
 
-    if ACCOUNT_COL not in df.columns or TYPE_COL not in df.columns:
-        raise ValueError(
-            "Unexpected GL export columns: %s" % (list(df.columns)[:6],)
-        )
+    if TYPE_COL not in df.columns:
+        raise ValueError("Unexpected GL export columns: %s" % (list(df.columns)[:6],))
 
-    df["_hdr"] = df[ACCOUNT_COL].apply(_parse_compte)
-    # Trailing-header layout: assign each row to the next "Compte" header below it.
-    df["_account"] = df["_hdr"].bfill()
+    # Prefer a dedicated account column if present and populated on detail rows.
+    acct_col = next(
+        (c for c in df.columns if str(c).strip().lower() in ACCOUNT_COL_CANDIDATES), None
+    )
+    detail_mask = df[TYPE_COL].notna()
+    if acct_col is not None and df.loc[detail_mask, acct_col].notna().any():
+        df["_account"] = df[acct_col].apply(_acct_str)
+    elif ACCOUNT_COL in df.columns:
+        # Trailing-header layout: assign each row to the next "Compte" header below it.
+        df["_account"] = df[ACCOUNT_COL].apply(_parse_compte).bfill()
+    else:
+        raise ValueError("No account column found: %s" % (list(df.columns)[:6],))
 
-    detail = df[df[TYPE_COL].notna()].copy()
+    detail = df[detail_mask].copy()
 
     accounts: Dict[str, dict] = {}
     for _, row in detail.iterrows():
         acc = row["_account"]
-        acc = UNATTRIBUTED if pd.isna(acc) else str(acc)
+        acc = UNATTRIBUTED if (acc is None or (isinstance(acc, float) and pd.isna(acc))) else str(acc)
         amt = row.get(AMOUNT_COL)
         if pd.isna(amt):
             continue
